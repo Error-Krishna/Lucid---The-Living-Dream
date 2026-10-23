@@ -1,0 +1,20 @@
+{
+  "name": "lucid-universe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LUCID: The Living Dream - An interactive, persistent, multiplayer virtual universe",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:web": "pnpm --filter lucid-web dev",
+    "dev:api": "pnpm --filter lucid-api dev",
+    "build": "pnpm --filter \"./packages/*\" build && pnpm --filter \"./apps/*\" build",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.15.0",
+    "typescript": "^5.5.4"
+  }
+}
