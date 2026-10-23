@@ -24,6 +24,7 @@ import {
   Shield,
   HelpCircle,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 
 const PLANET_IDS = Object.keys(PLANET_CATALOG) as PlanetId[];
@@ -60,21 +61,31 @@ export function CockpitFlightScene() {
   const initiateTakeoff = useUniverseStore((s) => s.initiateTakeoff);
   const activePlanet = useUniverseStore((s) => s.activePlanet);
 
-  // Awakening Sequence
+  // Flight settings & state
   const [awakeningStage, setAwakeningStage] = useState<
     'dark' | 'electrical' | 'lighting' | 'displays' | 'ready'
   >('ready');
-  const [hasBegun, setHasBegun] = useState(true);
   const [boost, setBoost] = useState(false);
   const [autopilot, setAutopilot] = useState(false);
   const [isMuted, setIsMuted] = useState(soundEngine.getIsMuted());
   const [showControlsHelp, setShowControlsHelp] = useState(true);
 
-  // Steering Euler angles
+  // Screen tracking telemetry for active target reticle
+  const [targetScreenPos, setTargetScreenPos] = useState<{
+    x: number;
+    y: number;
+    isBehind: boolean;
+    angleDegrees: number;
+  }>({ x: 50, y: 50, isBehind: false, angleDegrees: 0 });
+
+  // Steering Euler angles: yaw has 360-degree freedom!
   const steeringRef = useRef({ pitch: 0, yaw: 0, roll: 0 });
   const keysRef = useRef<Record<string, boolean>>({});
   const isMouseDownRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
+
+  // Cockpit interior group ref to attach to camera
+  const cockpitGroupRef = useRef<THREE.Group>(null);
 
   // Speed telemetry
   const speed = Math.round(
@@ -95,6 +106,29 @@ export function CockpitFlightScene() {
     );
   }, [selectedTargetId, spacecraftPosition]);
 
+  // Turn around 180° or align directly with target
+  const handleQuickTurnaround = useCallback(() => {
+    soundEngine.playTargetLocked();
+    if (selectedTargetId) {
+      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+      const dx = tx - spacecraftPosition[0];
+      const dy = ty - spacecraftPosition[1];
+      const dz = tz - spacecraftPosition[2];
+
+      const desiredYaw = Math.atan2(dx, -dz);
+      const horizDist = Math.hypot(dx, dz);
+      const desiredPitch = -Math.atan2(dy, Math.max(1, horizDist));
+
+      steeringRef.current.yaw = desiredYaw;
+      steeringRef.current.pitch = Math.max(-1.45, Math.min(1.45, desiredPitch));
+      steeringRef.current.roll = 0;
+    } else {
+      // 180-degree turnaround flip
+      steeringRef.current.yaw += Math.PI;
+      steeringRef.current.roll = 0;
+    }
+  }, [selectedTargetId, spacecraftPosition]);
+
   // Handle target navigation reference cycling (NEVER teleports)
   const handleCycleTarget = useCallback(
     (direction: 1 | -1 = 1) => {
@@ -112,7 +146,6 @@ export function CockpitFlightScene() {
       // Throttle controls
       if (e.code === 'KeyW' || e.code === 'ArrowUp') {
         if (flightMode === 'landed') {
-          // Manual takeoff liftoff trigger
           initiateTakeoff();
         } else {
           setThrottle(Math.min(1.0, throttle + 0.1));
@@ -121,6 +154,9 @@ export function CockpitFlightScene() {
         setThrottle(Math.max(0.0, throttle - 0.1));
       } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         setBoost(true);
+      } else if (e.code === 'KeyR') {
+        e.preventDefault();
+        handleQuickTurnaround();
       } else if (e.code === 'Space') {
         e.preventDefault();
         if (flightMode === 'landed') {
@@ -202,8 +238,13 @@ export function CockpitFlightScene() {
         const dy = e.clientY - lastMousePosRef.current.y;
         lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
-        steeringRef.current.yaw = Math.max(-0.65, Math.min(0.65, steeringRef.current.yaw - dx * 0.003));
-        steeringRef.current.pitch = Math.max(-0.5, Math.min(0.5, steeringRef.current.pitch + dy * 0.003));
+        // Continuous full 360-degree yaw steering (no clamping)
+        steeringRef.current.yaw -= dx * 0.0035;
+        // Pitch clamping within -83° to +83°
+        steeringRef.current.pitch = Math.max(
+          -1.45,
+          Math.min(1.45, steeringRef.current.pitch + dy * 0.0035)
+        );
       }
     };
 
@@ -237,24 +278,8 @@ export function CockpitFlightScene() {
     toggleMap,
     enterUniverseView,
     setTargetPlanet,
+    handleQuickTurnaround,
   ]);
-
-  // Awakening triggers
-  const startAwakening = useCallback(() => {
-    setHasBegun(true);
-    soundEngine.ensureContext();
-    soundEngine.playCockpitAwaken();
-    setTimeout(() => setAwakeningStage('electrical'), 600);
-    setTimeout(() => setAwakeningStage('lighting'), 1400);
-    setTimeout(() => {
-      setAwakeningStage('displays');
-      soundEngine.playRadarScan();
-    }, 2200);
-    setTimeout(() => {
-      setAwakeningStage('ready');
-      soundEngine.playTargetLocked();
-    }, 3000);
-  }, []);
 
   const toggleSound = () => {
     const muted = soundEngine.toggleMute();
@@ -273,8 +298,8 @@ export function CockpitFlightScene() {
           toneMappingExposure: 1.15,
         }}
       >
-        {/* Starfield Outside Windshield */}
-        <Stars radius={180} depth={80} count={4000} factor={3.5} saturation={0.9} fade />
+        {/* Deep Starfield Outside Windshield */}
+        <Stars radius={200} depth={100} count={4500} factor={4.0} saturation={0.9} fade />
         <color attach="background" args={['#02040c']} />
         <directionalLight position={[40, 20, -50]} intensity={1.5} color="#fff" />
         <ambientLight intensity={0.25} />
@@ -286,6 +311,8 @@ export function CockpitFlightScene() {
           throttle={throttle}
           boost={boost}
           autopilot={autopilot}
+          cockpitGroupRef={cockpitGroupRef}
+          onTargetScreenUpdate={setTargetScreenPos}
         />
 
         {/* 3D Celestial Bodies rendered at true physical coordinates */}
@@ -294,8 +321,8 @@ export function CockpitFlightScene() {
         {/* Expanding Holographic 3D Scanner Wave */}
         {isScanning && <ScannerPulseWave />}
 
-        {/* First-Person Cockpit Interior Mesh */}
-        <group rotation={[steeringRef.current.pitch, steeringRef.current.yaw, steeringRef.current.roll]}>
+        {/* First-Person Cockpit Interior Mesh (attached to vehicle orientation) */}
+        <group ref={cockpitGroupRef}>
           <CockpitInterior
             throttle={throttle}
             speed={speed}
@@ -339,7 +366,7 @@ export function CockpitFlightScene() {
                   ? `DESCENT // ALT: ${Math.round(radarAltitude)}M`
                   : flightMode === 'atmospheric_entry'
                   ? `ATMOSPHERIC ENTRY // SPEED: ${speed} KM/S`
-                  : `DEEP SPACE CRUISE // SPEED: ${speed} KM/S`}
+                  : `SPACEFLIGHT // SPEED: ${speed} KM/S`}
               </span>
               {gearDeployed && (
                 <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-500/60 text-[9px] font-mono text-emerald-300">
@@ -386,6 +413,16 @@ export function CockpitFlightScene() {
           </button>
 
           <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+
+          {/* Quick 180° Turnaround / Align Target Button */}
+          <button
+            onClick={handleQuickTurnaround}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/50 text-amber-200 text-[11px] font-mono transition-all hover:scale-105"
+            title="Turn Around 180° / Align Heading with Target [R]"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Turn 180° [R]</span>
+          </button>
 
           {/* Scanner Pulse Button */}
           <button
@@ -457,21 +494,45 @@ export function CockpitFlightScene() {
         <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-t from-orange-900/25 via-transparent to-amber-900/20 animate-pulse" />
       )}
 
-      {/* Center Target Reticle in HUD */}
-      {targetMeta && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+      {/* Target Behind Warning Banner with Direct Turnaround Action */}
+      {targetMeta && targetScreenPos.isBehind && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 pointer-events-auto">
+          <div className="glass-panel px-5 py-2.5 rounded-2xl bg-amber-950/90 border border-amber-400 text-amber-200 text-xs font-mono flex items-center gap-3 shadow-2xl animate-pulse">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <span>
+              TARGET IS BEHIND YOU ({targetScreenPos.angleDegrees}°)! STEER OR PRESS [R] TO TURN AROUND.
+            </span>
+            <button
+              onClick={handleQuickTurnaround}
+              className="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold font-mono text-xs transition-all shadow-md"
+            >
+              Turn 180° [R]
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic 3D Target Reticle tracking the planet across windshield */}
+      {targetMeta && !targetScreenPos.isBehind && (
+        <div
+          className="absolute pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2 transition-all duration-75"
+          style={{
+            left: `${Math.max(5, Math.min(95, targetScreenPos.x))}%`,
+            top: `${Math.max(8, Math.min(92, targetScreenPos.y))}%`,
+          }}
+        >
           <div
-            className="relative w-28 h-28 border border-dashed rounded-lg flex items-center justify-center"
+            className="relative w-24 h-24 border border-dashed rounded-lg flex items-center justify-center animate-pulse"
             style={{ borderColor: targetMeta.visualTheme.accentColor }}
           >
-            <Crosshair className="w-6 h-6 animate-pulse" style={{ color: targetMeta.visualTheme.accentColor }} />
+            <Crosshair className="w-6 h-6" style={{ color: targetMeta.visualTheme.accentColor }} />
             <span
-              className="absolute -top-6 text-[9px] font-mono tracking-wider uppercase bg-black/80 px-2 py-0.5 rounded border border-white/10"
+              className="absolute -top-5 text-[9px] font-mono tracking-wider uppercase bg-black/80 px-2 py-0.5 rounded border border-white/10 whitespace-nowrap"
               style={{ color: targetMeta.visualTheme.accentColor }}
             >
               {targetMeta.name.toUpperCase()}
             </span>
-            <span className="absolute -bottom-6 text-[10px] font-mono text-cyan-300 bg-black/80 px-2 py-0.5 rounded border border-white/10 font-bold">
+            <span className="absolute -bottom-5 text-[10px] font-mono text-cyan-300 bg-black/80 px-2 py-0.5 rounded border border-white/10 font-bold whitespace-nowrap">
               {Math.round(distanceToTarget)} KM
             </span>
           </div>
@@ -514,14 +575,15 @@ export function CockpitFlightScene() {
         <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none max-w-[95vw]">
           <div className="glass-panel px-5 py-2.5 rounded-2xl border border-slate-700/60 text-slate-300 text-xs font-mono flex flex-wrap items-center justify-center gap-4 shadow-2xl backdrop-blur-md">
             <span><strong className="text-cyan-400">W/S</strong> Throttle</span>
-            <span><strong className="text-cyan-400">A/D / Mouse</strong> Steer</span>
+            <span><strong className="text-cyan-400">A/D / Mouse</strong> Steer (360°)</span>
+            <span><strong className="text-cyan-400">R</strong> Turn Around 180°</span>
             <span><strong className="text-cyan-400">Q/E</strong> Roll</span>
             <span><strong className="text-cyan-400">Shift</strong> Boost</span>
+            <span><strong className="text-cyan-400">Space</strong> Autopilot</span>
             <span><strong className="text-cyan-400">F</strong> Pulse Scanner</span>
             <span><strong className="text-cyan-400">G</strong> Gear ({gearDeployed ? 'DOWN' : 'UP'})</span>
             <span><strong className="text-cyan-400">Tab / T</strong> Cycle Target</span>
             <span><strong className="text-cyan-400">M</strong> Starmap Atlas</span>
-            <span><strong className="text-cyan-400">H</strong> Toggle Guide</span>
           </div>
         </div>
       )}
@@ -538,12 +600,21 @@ function PhysicalFlightController({
   throttle,
   boost,
   autopilot,
+  cockpitGroupRef,
+  onTargetScreenUpdate,
 }: {
   steering: { pitch: number; yaw: number; roll: number };
   keys: Record<string, boolean>;
   throttle: number;
   boost: boolean;
   autopilot: boolean;
+  cockpitGroupRef: React.RefObject<THREE.Group>;
+  onTargetScreenUpdate: (pos: {
+    x: number;
+    y: number;
+    isBehind: boolean;
+    angleDegrees: number;
+  }) => void;
 }) {
   const { camera } = useThree();
   const spacecraftPosition = useUniverseStore((s) => s.spacecraftPosition);
@@ -570,7 +641,6 @@ function PhysicalFlightController({
   }, [spacecraftPosition]);
 
   useFrame((state, delta) => {
-    // Clamp delta time to avoid large physics steps
     const dt = Math.min(delta, 0.1);
 
     // If landed, hold grounded position
@@ -579,46 +649,57 @@ function PhysicalFlightController({
       return;
     }
 
-    // Steering keyboard inputs
+    // Steering keyboard inputs: Continuous 360-degree yaw freedom!
+    const turnRate = 1.8;
     if (keys['KeyA'] || keys['ArrowLeft']) {
-      steering.yaw = Math.max(-0.65, steering.yaw - 0.7 * dt);
-      steering.roll = Math.max(-0.45, steering.roll - 0.8 * dt);
+      steering.yaw += turnRate * dt; // Turn left continuously
+      steering.roll = THREE.MathUtils.lerp(steering.roll, -0.35, dt * 5); // Bank left
     } else if (keys['KeyD'] || keys['ArrowRight']) {
-      steering.yaw = Math.min(0.65, steering.yaw + 0.7 * dt);
-      steering.roll = Math.min(0.45, steering.roll + 0.8 * dt);
+      steering.yaw -= turnRate * dt; // Turn right continuously
+      steering.roll = THREE.MathUtils.lerp(steering.roll, 0.35, dt * 5); // Bank right
     } else {
-      steering.yaw *= 0.94;
-      steering.roll *= 0.92;
+      // In space, yaw maintains heading! Roll gently returns to level
+      steering.roll = THREE.MathUtils.lerp(steering.roll, 0, dt * 4);
     }
 
     if (keys['KeyQ']) {
-      steering.roll = Math.max(-0.5, steering.roll - 0.7 * dt);
+      steering.roll = Math.max(-0.6, steering.roll - 1.2 * dt);
     } else if (keys['KeyE']) {
-      steering.roll = Math.min(0.5, steering.roll + 0.7 * dt);
+      steering.roll = Math.min(0.6, steering.roll + 1.2 * dt);
     }
 
-    // Autopilot orientation assistance towards selected target
+    // Autopilot orientation towards selected target
     if (autopilot && selectedTargetId) {
       const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
       const targetVec = new THREE.Vector3(
         tx - posRef.current.x,
         ty - posRef.current.y,
         tz - posRef.current.z
-      ).normalize();
+      );
 
       const desiredYaw = Math.atan2(targetVec.x, -targetVec.z);
-      const desiredPitch = -Math.asin(Math.max(-1, Math.min(1, targetVec.y)));
+      const horizDist = Math.hypot(targetVec.x, targetVec.z);
+      const desiredPitch = -Math.atan2(targetVec.y, Math.max(1, horizDist));
 
-      steering.yaw = THREE.MathUtils.lerp(steering.yaw, desiredYaw * 0.4, dt * 2.0);
-      steering.pitch = THREE.MathUtils.lerp(steering.pitch, desiredPitch * 0.4, dt * 2.0);
+      // Smoothly slerp yaw and pitch
+      steering.yaw = THREE.MathUtils.lerp(steering.yaw, desiredYaw, dt * 2.5);
+      steering.pitch = THREE.MathUtils.lerp(steering.pitch, desiredPitch, dt * 2.5);
     }
 
-    // Forward direction heading vector from Euler angles
-    const forwardVec = new THREE.Vector3(
-      Math.sin(steering.yaw) * Math.cos(steering.pitch),
-      -Math.sin(steering.pitch),
-      -Math.cos(steering.yaw) * Math.cos(steering.pitch)
-    ).normalize();
+    // Orient camera to craft heading
+    camera.rotation.order = 'YXZ';
+    camera.rotation.set(steering.pitch, steering.yaw, steering.roll);
+
+    // Lock cockpit interior mesh to camera so it stays fixed in front of windshield
+    if (cockpitGroupRef.current) {
+      cockpitGroupRef.current.position.copy(camera.position);
+      cockpitGroupRef.current.rotation.copy(camera.rotation);
+    }
+
+    // Forward direction heading vector from Three.js camera
+    const forwardVec = new THREE.Vector3();
+    camera.getWorldDirection(forwardVec);
+    forwardVec.normalize();
 
     // Thrust calculation
     const baseThrust = throttle * 90;
@@ -711,7 +792,7 @@ function PhysicalFlightController({
     // Update position: pos += vel * dt
     posRef.current.add(velRef.current.clone().multiplyScalar(dt));
 
-    // Update store state periodically
+    // Update store state
     setSpacecraftPhysics(
       [posRef.current.x, posRef.current.y, posRef.current.z],
       [velRef.current.x, velRef.current.y, velRef.current.z],
@@ -723,6 +804,35 @@ function PhysicalFlightController({
     if (nowMs - lastSoundUpdateTime.current > 120) {
       lastSoundUpdateTime.current = nowMs;
       soundEngine.setEngineThrust(throttle, boost);
+    }
+
+    // Calculate screen space tracking for selected target planet
+    if (selectedTargetId) {
+      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+      const relTarget = new THREE.Vector3(
+        tx - posRef.current.x,
+        ty - posRef.current.y,
+        tz - posRef.current.z
+      );
+
+      // Check if target is behind the camera
+      const dot = forwardVec.dot(relTarget.clone().normalize());
+      const angleRad = forwardVec.angleTo(relTarget.clone().normalize());
+      const angleDeg = Math.round((angleRad * 180) / Math.PI);
+
+      const isBehind = dot < 0.1; // Behind or perpendicular to heading
+
+      // 3D-to-2D screen projection
+      const proj = relTarget.clone().project(camera);
+      const screenX = (proj.x * 0.5 + 0.5) * 100;
+      const screenY = (-proj.y * 0.5 + 0.5) * 100;
+
+      onTargetScreenUpdate({
+        x: screenX,
+        y: screenY,
+        isBehind,
+        angleDegrees: angleDeg,
+      });
     }
   });
 
@@ -743,7 +853,7 @@ function AllPlanetsInSpace() {
         const meta = PLANET_CATALOG[pid];
         const [px, py, pz] = getPlanetUniversePosition(pid);
 
-        // Position relative to the spacecraft camera: (planetPos - craftPos)
+        // Position relative to the spacecraft: (planetPos - craftPos)
         const relX = px - spacecraftPosition[0];
         const relY = py - spacecraftPosition[1];
         const relZ = pz - spacecraftPosition[2];
@@ -793,7 +903,6 @@ function SinglePlanetGlobe({
   });
 
   const dist = Math.hypot(position[0], position[1], position[2]);
-  // Don't render if extremely far away to optimize performance
   if (dist > 8000) return null;
 
   const color = isDiscovered ? meta.visualTheme.accentColor : '#64748b';
