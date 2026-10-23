@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { CockpitInterior } from './CockpitInterior.js';
+import { FlightGuidanceHUD, FlightTelemetry } from './FlightGuidanceHUD.js';
 import { soundEngine } from '../../lib/sound.js';
 import { useUniverseStore } from '../../stores/useUniverseStore.js';
 import {
@@ -29,6 +30,33 @@ import {
 
 const PLANET_IDS = Object.keys(PLANET_CATALOG) as PlanetId[];
 
+function getCardinal(deg: number): string {
+  const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(deg / 45) % 8;
+  return cardinals[index];
+}
+
+const DEFAULT_TELEMETRY: FlightTelemetry = {
+  headingDeg: 0,
+  cardinal: 'N',
+  pitchDeg: 0,
+  rollDeg: 0,
+  speed: 0,
+  forwardSpeed: 0,
+  lateralSpeed: 0,
+  verticalSpeed: 0,
+  closingSpeed: 0,
+  isApproaching: false,
+  etaSeconds: null,
+  headingErrorDeg: 0,
+  pitchErrorDeg: 0,
+  angularOffsetDeg: 0,
+  isAligned: false,
+  targetSector: 'ahead',
+  targetScreenPos: { x: 50, y: 50, onScreen: true, isBehind: false },
+  progradeScreenPos: { x: 50, y: 50, onScreen: true },
+};
+
 export function CockpitFlightScene() {
   const selectedTargetId = useUniverseStore((s) => s.selectedTargetId);
   const setTargetPlanet = useUniverseStore((s) => s.setTargetPlanet);
@@ -48,6 +76,12 @@ export function CockpitFlightScene() {
   const toggleGear = useUniverseStore((s) => s.toggleGear);
   const landingAssistance = useUniverseStore((s) => s.landingAssistance);
   const toggleLandingAssistance = useUniverseStore((s) => s.toggleLandingAssistance);
+  const headingAssistance = useUniverseStore((s) => s.headingAssistance);
+  const toggleHeadingAssistance = useUniverseStore((s) => s.toggleHeadingAssistance);
+  const approachAssistance = useUniverseStore((s) => s.approachAssistance);
+  const toggleApproachAssistance = useUniverseStore((s) => s.toggleApproachAssistance);
+  const isTutorialVisible = useUniverseStore((s) => s.isTutorialVisible);
+  const setIsTutorialVisible = useUniverseStore((s) => s.setIsTutorialVisible);
   const isScanning = useUniverseStore((s) => s.isScanning);
   const pulseScanner = useUniverseStore((s) => s.pulseScanner);
   const discoveredPlanets = useUniverseStore((s) => s.discoveredPlanets);
@@ -70,13 +104,8 @@ export function CockpitFlightScene() {
   const [isMuted, setIsMuted] = useState(soundEngine.getIsMuted());
   const [showControlsHelp, setShowControlsHelp] = useState(true);
 
-  // Screen tracking telemetry for active target reticle
-  const [targetScreenPos, setTargetScreenPos] = useState<{
-    x: number;
-    y: number;
-    isBehind: boolean;
-    angleDegrees: number;
-  }>({ x: 50, y: 50, isBehind: false, angleDegrees: 0 });
+  // Full 6DOF Flight Telemetry & Guidance State
+  const [telemetry, setTelemetry] = useState<FlightTelemetry>(DEFAULT_TELEMETRY);
 
   // Steering Euler angles: yaw has 360-degree freedom!
   const steeringRef = useRef({ pitch: 0, yaw: 0, roll: 0 });
@@ -175,6 +204,12 @@ export function CockpitFlightScene() {
       } else if (e.code === 'KeyG') {
         e.preventDefault();
         toggleGear();
+      } else if (e.code === 'KeyZ') {
+        e.preventDefault();
+        toggleHeadingAssistance();
+      } else if (e.code === 'KeyC') {
+        e.preventDefault();
+        toggleApproachAssistance();
       } else if (e.code === 'KeyX') {
         e.preventDefault();
         toggleLandingAssistance();
@@ -194,6 +229,7 @@ export function CockpitFlightScene() {
         enterUniverseView();
       } else if (e.code === 'KeyH') {
         setShowControlsHelp((prev) => !prev);
+        setIsTutorialVisible(!isTutorialVisible);
       } else {
         // Direct number keys 1-0 for setting target navigation reference (never teleports)
         const numberMap: Record<string, PlanetId> = {
@@ -271,7 +307,11 @@ export function CockpitFlightScene() {
     setThrottle,
     pulseScanner,
     toggleGear,
+    toggleHeadingAssistance,
+    toggleApproachAssistance,
     toggleLandingAssistance,
+    setIsTutorialVisible,
+    isTutorialVisible,
     disembarkCraft,
     initiateTakeoff,
     handleCycleTarget,
@@ -312,7 +352,7 @@ export function CockpitFlightScene() {
           boost={boost}
           autopilot={autopilot}
           cockpitGroupRef={cockpitGroupRef}
-          onTargetScreenUpdate={setTargetScreenPos}
+          setTelemetry={setTelemetry}
         />
 
         {/* 3D Celestial Bodies rendered at true physical coordinates */}
@@ -494,50 +534,13 @@ export function CockpitFlightScene() {
         <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-t from-orange-900/25 via-transparent to-amber-900/20 animate-pulse" />
       )}
 
-      {/* Target Behind Warning Banner with Direct Turnaround Action */}
-      {targetMeta && targetScreenPos.isBehind && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 pointer-events-auto">
-          <div className="glass-panel px-5 py-2.5 rounded-2xl bg-amber-950/90 border border-amber-400 text-amber-200 text-xs font-mono flex items-center gap-3 shadow-2xl animate-pulse">
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
-            <span>
-              TARGET IS BEHIND YOU ({targetScreenPos.angleDegrees}°)! STEER OR PRESS [R] TO TURN AROUND.
-            </span>
-            <button
-              onClick={handleQuickTurnaround}
-              className="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold font-mono text-xs transition-all shadow-md"
-            >
-              Turn 180° [R]
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Dynamic 3D Target Reticle tracking the planet across windshield */}
-      {targetMeta && !targetScreenPos.isBehind && (
-        <div
-          className="absolute pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2 transition-all duration-75"
-          style={{
-            left: `${Math.max(5, Math.min(95, targetScreenPos.x))}%`,
-            top: `${Math.max(8, Math.min(92, targetScreenPos.y))}%`,
-          }}
-        >
-          <div
-            className="relative w-24 h-24 border border-dashed rounded-lg flex items-center justify-center animate-pulse"
-            style={{ borderColor: targetMeta.visualTheme.accentColor }}
-          >
-            <Crosshair className="w-6 h-6" style={{ color: targetMeta.visualTheme.accentColor }} />
-            <span
-              className="absolute -top-5 text-[9px] font-mono tracking-wider uppercase bg-black/80 px-2 py-0.5 rounded border border-white/10 whitespace-nowrap"
-              style={{ color: targetMeta.visualTheme.accentColor }}
-            >
-              {targetMeta.name.toUpperCase()}
-            </span>
-            <span className="absolute -bottom-5 text-[10px] font-mono text-cyan-300 bg-black/80 px-2 py-0.5 rounded border border-white/10 font-bold whitespace-nowrap">
-              {Math.round(distanceToTarget)} KM
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Flight Guidance HUD: Compass Ribbon, Attitude Ball, Nose Crosshair, Velocity Marker, Reticle & Assistance */}
+      <FlightGuidanceHUD
+        telemetry={telemetry}
+        targetMeta={targetMeta}
+        distanceToTarget={distanceToTarget}
+        onQuickTurnaround={handleQuickTurnaround}
+      />
 
       {/* Landed / Grounded Action Prompt */}
       {flightMode === 'landed' && (
@@ -576,14 +579,13 @@ export function CockpitFlightScene() {
           <div className="glass-panel px-5 py-2.5 rounded-2xl border border-slate-700/60 text-slate-300 text-xs font-mono flex flex-wrap items-center justify-center gap-4 shadow-2xl backdrop-blur-md">
             <span><strong className="text-cyan-400">W/S</strong> Throttle</span>
             <span><strong className="text-cyan-400">A/D / Mouse</strong> Steer (360°)</span>
-            <span><strong className="text-cyan-400">R</strong> Turn Around 180°</span>
-            <span><strong className="text-cyan-400">Q/E</strong> Roll</span>
-            <span><strong className="text-cyan-400">Shift</strong> Boost</span>
-            <span><strong className="text-cyan-400">Space</strong> Autopilot</span>
-            <span><strong className="text-cyan-400">F</strong> Pulse Scanner</span>
+            <span><strong className="text-cyan-400">R</strong> Turn 180° / Align</span>
+            <span><strong className="text-cyan-400">Z</strong> Heading Assist</span>
+            <span><strong className="text-cyan-400">C</strong> Approach Assist</span>
+            <span><strong className="text-cyan-400">X</strong> Level Assist</span>
             <span><strong className="text-cyan-400">G</strong> Gear ({gearDeployed ? 'DOWN' : 'UP'})</span>
-            <span><strong className="text-cyan-400">Tab / T</strong> Cycle Target</span>
-            <span><strong className="text-cyan-400">M</strong> Starmap Atlas</span>
+            <span><strong className="text-cyan-400">Tab / T</strong> Target</span>
+            <span><strong className="text-cyan-400">H</strong> Tutorial</span>
           </div>
         </div>
       )}
@@ -601,7 +603,7 @@ function PhysicalFlightController({
   boost,
   autopilot,
   cockpitGroupRef,
-  onTargetScreenUpdate,
+  setTelemetry,
 }: {
   steering: { pitch: number; yaw: number; roll: number };
   keys: Record<string, boolean>;
@@ -609,12 +611,7 @@ function PhysicalFlightController({
   boost: boolean;
   autopilot: boolean;
   cockpitGroupRef: React.RefObject<THREE.Group>;
-  onTargetScreenUpdate: (pos: {
-    x: number;
-    y: number;
-    isBehind: boolean;
-    angleDegrees: number;
-  }) => void;
+  setTelemetry: React.Dispatch<React.SetStateAction<FlightTelemetry>>;
 }) {
   const { camera } = useThree();
   const spacecraftPosition = useUniverseStore((s) => s.spacecraftPosition);
@@ -627,6 +624,8 @@ function PhysicalFlightController({
   const setRadarAltitude = useUniverseStore((s) => s.setRadarAltitude);
   const attemptLanding = useUniverseStore((s) => s.attemptLanding);
   const landingAssistance = useUniverseStore((s) => s.landingAssistance);
+  const headingAssistance = useUniverseStore((s) => s.headingAssistance);
+  const approachAssistance = useUniverseStore((s) => s.approachAssistance);
   const takeoffState = useUniverseStore((s) => s.takeoffState);
 
   // Position and velocity vectors
@@ -634,6 +633,7 @@ function PhysicalFlightController({
   const velRef = useRef(new THREE.Vector3(...spacecraftVelocity));
   const lastSoundUpdateTime = useRef(0);
   const lastWarningSoundTime = useRef(0);
+  const lastTelemetryUpdateTime = useRef(0);
 
   // Sync position if changed externally
   useEffect(() => {
@@ -668,22 +668,35 @@ function PhysicalFlightController({
       steering.roll = Math.min(0.6, steering.roll + 1.2 * dt);
     }
 
-    // Autopilot orientation towards selected target
-    if (autopilot && selectedTargetId) {
-      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
-      const targetVec = new THREE.Vector3(
-        tx - posRef.current.x,
-        ty - posRef.current.y,
-        tz - posRef.current.z
-      );
+    // Heading assistance or Autopilot orientation towards selected target
+    if ((headingAssistance || autopilot) && selectedTargetId) {
+      const isActivelySteering =
+        keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
+      if (!isActivelySteering) {
+        const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+        const targetVec = new THREE.Vector3(
+          tx - posRef.current.x,
+          ty - posRef.current.y,
+          tz - posRef.current.z
+        );
 
-      const desiredYaw = Math.atan2(targetVec.x, -targetVec.z);
-      const horizDist = Math.hypot(targetVec.x, targetVec.z);
-      const desiredPitch = -Math.atan2(targetVec.y, Math.max(1, horizDist));
+        const desiredYaw = Math.atan2(targetVec.x, -targetVec.z);
+        const horizDist = Math.hypot(targetVec.x, targetVec.z);
+        const desiredPitch = -Math.atan2(targetVec.y, Math.max(1, horizDist));
 
-      // Smoothly slerp yaw and pitch
-      steering.yaw = THREE.MathUtils.lerp(steering.yaw, desiredYaw, dt * 2.5);
-      steering.pitch = THREE.MathUtils.lerp(steering.pitch, desiredPitch, dt * 2.5);
+        // Shortest angular turn difference so craft doesn't spin wildly
+        let diffYaw = desiredYaw - steering.yaw;
+        while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+        while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+
+        const assistRate = autopilot ? 2.5 : 1.4;
+        steering.yaw += diffYaw * Math.min(1.0, assistRate * dt);
+        steering.pitch = THREE.MathUtils.lerp(
+          steering.pitch,
+          Math.max(-1.45, Math.min(1.45, desiredPitch)),
+          dt * assistRate
+        );
+      }
     }
 
     // Orient camera to craft heading
@@ -696,10 +709,13 @@ function PhysicalFlightController({
       cockpitGroupRef.current.rotation.copy(camera.rotation);
     }
 
-    // Forward direction heading vector from Three.js camera
+    // Camera world vectors
     const forwardVec = new THREE.Vector3();
     camera.getWorldDirection(forwardVec);
     forwardVec.normalize();
+
+    const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    const upVec = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
 
     // Thrust calculation
     const baseThrust = throttle * 90;
@@ -709,6 +725,32 @@ function PhysicalFlightController({
     // Apply thrust along forward heading
     const accel = forwardVec.clone().multiplyScalar(totalThrust * dt);
     velRef.current.add(accel);
+
+    // Approach Assistance: dampen lateral drift relative to approach corridor & regulate speed
+    if (approachAssistance && selectedTargetId) {
+      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+      const toTargetVec = new THREE.Vector3(
+        tx - posRef.current.x,
+        ty - posRef.current.y,
+        tz - posRef.current.z
+      );
+      const dTarget = toTargetVec.length();
+      if (dTarget > 1) {
+        const uTarget = toTargetVec.clone().normalize();
+        const colinearSpeed = velRef.current.dot(uTarget);
+        const colinearVel = uTarget.clone().multiplyScalar(colinearSpeed);
+        const lateralDrift = velRef.current.clone().sub(colinearVel);
+        velRef.current.sub(lateralDrift.multiplyScalar(Math.min(1.0, 0.45 * dt)));
+
+        // Speed corridor regulation in proximity (< 250km)
+        if (dTarget < 250 && dTarget > 40) {
+          const corridorMaxSpeed = Math.max(35, (dTarget / 250) * 85);
+          if (velRef.current.length() > corridorMaxSpeed) {
+            velRef.current.multiplyScalar(Math.max(0.5, 1 - 0.5 * dt));
+          }
+        }
+      }
+    }
 
     // Liftoff vertical thrust when initiating takeoff
     if (takeoffState === 'liftoff') {
@@ -806,32 +848,135 @@ function PhysicalFlightController({
       soundEngine.setEngineThrust(throttle, boost);
     }
 
-    // Calculate screen space tracking for selected target planet
-    if (selectedTargetId) {
-      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
-      const relTarget = new THREE.Vector3(
-        tx - posRef.current.x,
-        ty - posRef.current.y,
-        tz - posRef.current.z
-      );
+    // Guidance telemetry computation (throttled to ~30Hz for silky UI performance)
+    if (nowMs - lastTelemetryUpdateTime.current > 33) {
+      lastTelemetryUpdateTime.current = nowMs;
 
-      // Check if target is behind the camera
-      const dot = forwardVec.dot(relTarget.clone().normalize());
-      const angleRad = forwardVec.angleTo(relTarget.clone().normalize());
-      const angleDeg = Math.round((angleRad * 180) / Math.PI);
+      // Compass Heading & Pitch & Roll
+      let headingDeg = (Math.atan2(forwardVec.x, -forwardVec.z) * 180) / Math.PI;
+      headingDeg = ((headingDeg % 360) + 360) % 360;
+      const cardinal = getCardinal(headingDeg);
+      const pitchDeg = (Math.asin(Math.max(-1, Math.min(1, forwardVec.y))) * 180) / Math.PI;
+      const rollDeg = (steering.roll * 180) / Math.PI;
 
-      const isBehind = dot < 0.1; // Behind or perpendicular to heading
+      // Velocities
+      const curSpeed = velRef.current.length();
+      const fwdSpeed = velRef.current.dot(forwardVec);
+      const latSpeed = velRef.current.dot(rightVec);
+      const vertSpeed = velRef.current.dot(upVec);
 
-      // 3D-to-2D screen projection
-      const proj = relTarget.clone().project(camera);
-      const screenX = (proj.x * 0.5 + 0.5) * 100;
-      const screenY = (-proj.y * 0.5 + 0.5) * 100;
+      // Prograde Velocity Vector Projection
+      let progradeScreenX = 50;
+      let progradeScreenY = 50;
+      let progradeOnScreen = false;
+      if (curSpeed > 0.8) {
+        const progradeDir = velRef.current.clone().normalize();
+        const isFwdMotion = forwardVec.dot(progradeDir) > 0.05;
+        if (isFwdMotion) {
+          const pPoint = posRef.current.clone().add(progradeDir.multiplyScalar(60));
+          const pProj = pPoint.project(camera);
+          if (pProj.z < 1) {
+            progradeScreenX = (pProj.x * 0.5 + 0.5) * 100;
+            progradeScreenY = (-pProj.y * 0.5 + 0.5) * 100;
+            progradeOnScreen =
+              progradeScreenX >= 3 &&
+              progradeScreenX <= 97 &&
+              progradeScreenY >= 5 &&
+              progradeScreenY <= 95;
+          }
+        }
+      }
 
-      onTargetScreenUpdate({
-        x: screenX,
-        y: screenY,
-        isBehind,
-        angleDegrees: angleDeg,
+      // Target Planet Telemetry
+      let headingErrorDeg = 0;
+      let pitchErrorDeg = 0;
+      let angularOffsetDeg = 0;
+      let isAligned = false;
+      let targetSector: 'ahead' | 'beside' | 'behind' = 'ahead';
+      let targetScreenX = 50;
+      let targetScreenY = 50;
+      let targetOnScreen = false;
+      let isTargetBehind = false;
+      let closingSpeed = 0;
+      let isApproaching = false;
+      let etaSeconds: number | null = null;
+
+      if (selectedTargetId) {
+        const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+        const relTarget = new THREE.Vector3(
+          tx - posRef.current.x,
+          ty - posRef.current.y,
+          tz - posRef.current.z
+        );
+        const distTarget = relTarget.length();
+        if (distTarget > 0.001) {
+          const uTarget = relTarget.clone().normalize();
+
+          // Local coordinate errors
+          const rFwd = relTarget.dot(forwardVec);
+          const rRight = relTarget.dot(rightVec);
+          const rUp = relTarget.dot(upVec);
+
+          headingErrorDeg = (Math.atan2(rRight, rFwd) * 180) / Math.PI;
+          const horizDist = Math.hypot(rFwd, rRight);
+          pitchErrorDeg = (Math.atan2(rUp, Math.max(1, horizDist)) * 180) / Math.PI;
+
+          const dotFwd = Math.max(-1, Math.min(1, forwardVec.dot(uTarget)));
+          angularOffsetDeg = Math.round((Math.acos(dotFwd) * 180) / Math.PI);
+          isAligned = angularOffsetDeg <= 4;
+
+          if (angularOffsetDeg > 105) targetSector = 'behind';
+          else if (angularOffsetDeg > 40) targetSector = 'beside';
+          else targetSector = 'ahead';
+
+          // Screen projection
+          const tPoint = posRef.current.clone().add(uTarget.clone().multiplyScalar(60));
+          const tProj = tPoint.project(camera);
+          isTargetBehind = tProj.z > 1 || dotFwd <= 0.1;
+          targetScreenX = (tProj.x * 0.5 + 0.5) * 100;
+          targetScreenY = (-tProj.y * 0.5 + 0.5) * 100;
+          targetOnScreen =
+            !isTargetBehind &&
+            targetScreenX >= 3 &&
+            targetScreenX <= 97 &&
+            targetScreenY >= 5 &&
+            targetScreenY <= 95;
+
+          closingSpeed = velRef.current.dot(uTarget);
+          isApproaching = closingSpeed > 1;
+          etaSeconds =
+            isApproaching && closingSpeed > 0.5 ? Math.round(distTarget / closingSpeed) : null;
+        }
+      }
+
+      setTelemetry({
+        headingDeg: Math.round(headingDeg),
+        cardinal,
+        pitchDeg: Math.round(pitchDeg),
+        rollDeg: Math.round(rollDeg),
+        speed: Math.round(curSpeed),
+        forwardSpeed: Math.round(fwdSpeed),
+        lateralSpeed: Math.round(latSpeed),
+        verticalSpeed: Math.round(vertSpeed),
+        closingSpeed: Math.round(closingSpeed),
+        isApproaching,
+        etaSeconds,
+        headingErrorDeg: Math.round(headingErrorDeg * 10) / 10,
+        pitchErrorDeg: Math.round(pitchErrorDeg * 10) / 10,
+        angularOffsetDeg,
+        isAligned,
+        targetSector,
+        targetScreenPos: {
+          x: Math.round(targetScreenX * 10) / 10,
+          y: Math.round(targetScreenY * 10) / 10,
+          onScreen: targetOnScreen,
+          isBehind: isTargetBehind,
+        },
+        progradeScreenPos: {
+          x: Math.round(progradeScreenX * 10) / 10,
+          y: Math.round(progradeScreenY * 10) / 10,
+          onScreen: progradeOnScreen,
+        },
       });
     }
   });

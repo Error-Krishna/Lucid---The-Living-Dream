@@ -110,4 +110,33 @@ describe('useUniverseStore & World-Building', () => {
     store.initiateTakeoff();
     expect(useUniverseStore.getState().takeoffState).toBe('liftoff');
   });
+
+  it('controls flight assistance modes and interactive pilot tutorial states', () => {
+    const store = useUniverseStore.getState();
+
+    // Initial default state
+    expect(store.headingAssistance).toBe(false);
+    expect(store.approachAssistance).toBe(false);
+    expect(store.flightTutorialStep).toBe(0);
+    expect(store.isTutorialVisible).toBe(true);
+
+    // Toggle Heading Assistance
+    store.toggleHeadingAssistance();
+    expect(useUniverseStore.getState().headingAssistance).toBe(true);
+    store.toggleHeadingAssistance();
+    expect(useUniverseStore.getState().headingAssistance).toBe(false);
+
+    // Toggle Approach Assistance
+    store.toggleApproachAssistance();
+    expect(useUniverseStore.getState().approachAssistance).toBe(true);
+    store.toggleApproachAssistance();
+    expect(useUniverseStore.getState().approachAssistance).toBe(false);
+
+    // Pilot Tutorial Navigation
+    store.setFlightTutorialStep(3);
+    expect(useUniverseStore.getState().flightTutorialStep).toBe(3);
+
+    store.setIsTutorialVisible(false);
+    expect(useUniverseStore.getState().isTutorialVisible).toBe(false);
+  });
 });

@@ -69,6 +69,10 @@ interface UniverseState {
   takeoffState: TakeoffState;
   gearDeployed: boolean;
   landingAssistance: boolean;
+  headingAssistance: boolean;
+  approachAssistance: boolean;
+  flightTutorialStep: number;
+  isTutorialVisible: boolean;
   isScanning: boolean;
   discoveredPlanets: Partial<Record<PlanetId, boolean>>;
   throttle: number;
@@ -86,6 +90,10 @@ interface UniverseState {
   toggleGear: () => boolean;
   setGearDeployed: (deployed: boolean) => void;
   toggleLandingAssistance: () => boolean;
+  toggleHeadingAssistance: () => boolean;
+  toggleApproachAssistance: () => boolean;
+  setFlightTutorialStep: (step: number) => void;
+  setIsTutorialVisible: (visible: boolean) => void;
   setFlightMode: (mode: FlightMode) => void;
   setLandingState: (state: LandingState, feedback?: string | null) => void;
   setTakeoffState: (state: TakeoffState) => void;
@@ -294,6 +302,10 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
     takeoffState: 'airborne',
     gearDeployed: false,
     landingAssistance: false,
+    headingAssistance: false,
+    approachAssistance: false,
+    flightTutorialStep: 0,
+    isTutorialVisible: true,
     isScanning: false,
     discoveredPlanets: { origin: true },
     throttle: 0.35,
@@ -330,6 +342,25 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
       set({ landingAssistance: next });
       return next;
     },
+
+    toggleHeadingAssistance: () => {
+      const next = !get().headingAssistance;
+      if (next) soundEngine.playTargetLocked();
+      else soundEngine.playUIBeep('low');
+      set({ headingAssistance: next });
+      return next;
+    },
+
+    toggleApproachAssistance: () => {
+      const next = !get().approachAssistance;
+      if (next) soundEngine.playTargetLocked();
+      else soundEngine.playUIBeep('low');
+      set({ approachAssistance: next });
+      return next;
+    },
+
+    setFlightTutorialStep: (step) => set({ flightTutorialStep: step }),
+    setIsTutorialVisible: (visible) => set({ isTutorialVisible: visible }),
 
     setFlightMode: (flightMode) => set({ flightMode }),
     setLandingState: (landingState, landingFeedback = null) =>
