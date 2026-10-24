@@ -4,6 +4,11 @@ import { Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { CockpitInterior } from './CockpitInterior.js';
 import { FlightGuidanceHUD, FlightTelemetry } from './FlightGuidanceHUD.js';
+import { VelocityMotionField } from './VelocityMotionField.js';
+import { FloatingPlanetDiscoveryText } from './FloatingPlanetDiscoveryText.js';
+import { FlightTutorialOverlay } from './FlightTutorialOverlay.js';
+import { ContextualGuidanceBanner } from './ContextualGuidanceBanner.js';
+import { FLIGHT_SENSITIVITY_PRESETS, FlightSensitivityConfig } from './flightSensitivityConfig.js';
 import { soundEngine } from '../../lib/sound.js';
 import { useUniverseStore } from '../../stores/useUniverseStore.js';
 import { getPlanetEnvironment } from '../planets/planetEnvironmentConfig.js';
@@ -95,6 +100,12 @@ export function CockpitFlightScene() {
   const disembarkCraft = useUniverseStore((s) => s.disembarkCraft);
   const initiateTakeoff = useUniverseStore((s) => s.initiateTakeoff);
   const activePlanet = useUniverseStore((s) => s.activePlanet);
+  const flightSensitivity = useUniverseStore((s) => s.flightSensitivity);
+
+  const sensitivity = useMemo(
+    () => FLIGHT_SENSITIVITY_PRESETS[flightSensitivity] || FLIGHT_SENSITIVITY_PRESETS.default,
+    [flightSensitivity]
+  );
 
   // Flight settings & state
   const [awakeningStage, setAwakeningStage] = useState<
@@ -275,12 +286,12 @@ export function CockpitFlightScene() {
         const dy = e.clientY - lastMousePosRef.current.y;
         lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
-        // Continuous full 360-degree yaw steering (no clamping)
-        steeringRef.current.yaw -= dx * 0.0035;
-        // Pitch clamping within -83° to +83°
+        // Continuous full 360-degree yaw steering using calibrated sensitivity
+        steeringRef.current.yaw -= dx * sensitivity.mouseSensitivity;
+        // Pitch clamping within specified limits
         steeringRef.current.pitch = Math.max(
-          -1.45,
-          Math.min(1.45, steeringRef.current.pitch + dy * 0.0035)
+          -sensitivity.pitchClampRad,
+          Math.min(sensitivity.pitchClampRad, steeringRef.current.pitch + dy * sensitivity.mouseSensitivity)
         );
       }
     };
@@ -369,6 +380,9 @@ export function CockpitFlightScene() {
           color={isAtmospheric ? envConfig.lighting.ambientColor : '#94a3b8'}
         />
 
+        {/* Velocity-Responsive Directional Streaks & Cosmic Dust */}
+        <VelocityMotionField velocity={spacecraftVelocity} />
+
         {/* Continuous 3D Spacecraft Physics & Atmospheric Controller */}
         <PhysicalFlightController
           steering={steeringRef.current}
@@ -378,6 +392,7 @@ export function CockpitFlightScene() {
           autopilot={autopilot}
           cockpitGroupRef={cockpitGroupRef}
           setTelemetry={setTelemetry}
+          sensitivity={sensitivity}
         />
 
         {/* 3D Celestial Bodies rendered at true physical coordinates */}
@@ -567,6 +582,19 @@ export function CockpitFlightScene() {
         onQuickTurnaround={handleQuickTurnaround}
       />
 
+      {/* Dynamic Contextual Pilot Guidance Banner */}
+      <ContextualGuidanceBanner
+        telemetry={telemetry}
+        targetMeta={targetMeta}
+        flightMode={flightMode}
+        radarAltitude={radarAltitude}
+        activePlanet={activePlanet}
+        gearDeployed={gearDeployed}
+      />
+
+      {/* Interactive Step-by-Step Flight Tutorial */}
+      <FlightTutorialOverlay />
+
       {/* Landed / Grounded Action Prompt */}
       {flightMode === 'landed' && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto text-center">
@@ -629,6 +657,7 @@ function PhysicalFlightController({
   autopilot,
   cockpitGroupRef,
   setTelemetry,
+  sensitivity = FLIGHT_SENSITIVITY_PRESETS.default,
 }: {
   steering: { pitch: number; yaw: number; roll: number };
   keys: Record<string, boolean>;
@@ -637,6 +666,7 @@ function PhysicalFlightController({
   autopilot: boolean;
   cockpitGroupRef: React.RefObject<THREE.Group>;
   setTelemetry: React.Dispatch<React.SetStateAction<FlightTelemetry>>;
+  sensitivity?: FlightSensitivityConfig;
 }) {
   const { camera } = useThree();
   const spacecraftPosition = useUniverseStore((s) => s.spacecraftPosition);
@@ -675,7 +705,7 @@ function PhysicalFlightController({
     }
 
     // Steering keyboard inputs: Continuous 360-degree yaw freedom!
-    const turnRate = 1.8;
+    const turnRate = sensitivity.yawTurnRate;
     if (keys['KeyA'] || keys['ArrowLeft']) {
       steering.yaw += turnRate * dt; // Turn left continuously
       steering.roll = THREE.MathUtils.lerp(steering.roll, -0.35, dt * 5); // Bank left
@@ -684,7 +714,7 @@ function PhysicalFlightController({
       steering.roll = THREE.MathUtils.lerp(steering.roll, 0.35, dt * 5); // Bank right
     } else {
       // In space, yaw maintains heading! Roll gently returns to level
-      steering.roll = THREE.MathUtils.lerp(steering.roll, 0, dt * 4);
+      steering.roll = THREE.MathUtils.lerp(steering.roll, 0, dt * sensitivity.rollAutoLevelRate);
     }
 
     if (keys['KeyQ']) {
@@ -743,13 +773,23 @@ function PhysicalFlightController({
     const upVec = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
 
     // Thrust calculation
-    const baseThrust = throttle * 90;
-    const boostMult = boost ? 2.4 : 1.0;
+    const baseThrust = throttle * sensitivity.thrustAcceleration;
+    const boostMult = boost ? sensitivity.boostMultiplier : 1.0;
     const totalThrust = baseThrust * boostMult;
 
     // Apply thrust along forward heading
     const accel = forwardVec.clone().multiplyScalar(totalThrust * dt);
     velRef.current.add(accel);
+
+    // Active retro-braking thrusters when holding reverse key [S]
+    if (keys['KeyS'] || keys['ArrowDown']) {
+      const curSpeed = velRef.current.length();
+      if (curSpeed > 0.1) {
+        const brakeDecel = sensitivity.thrustAcceleration * 0.85 * dt;
+        const newSpeed = Math.max(0, curSpeed - brakeDecel);
+        velRef.current.multiplyScalar(newSpeed / curSpeed);
+      }
+    }
 
     // Approach Assistance: dampen lateral drift relative to approach corridor & regulate speed
     if (approachAssistance && selectedTargetId) {
@@ -1033,14 +1073,23 @@ function AllPlanetsInSpace() {
         const planetScale = (meta.radius || 3) * 12;
 
         return (
-          <SinglePlanetGlobe
-            key={pid}
-            meta={meta}
-            position={[relX, relY, relZ]}
-            scale={planetScale}
-            isTarget={isTarget}
-            isDiscovered={isDiscovered}
-          />
+          <React.Fragment key={pid}>
+            <SinglePlanetGlobe
+              meta={meta}
+              position={[relX, relY, relZ]}
+              scale={planetScale}
+              isTarget={isTarget}
+              isDiscovered={isDiscovered}
+            />
+            {isDiscovered && (
+              <FloatingPlanetDiscoveryText
+                meta={meta}
+                position={[relX, relY, relZ]}
+                isTarget={isTarget}
+                distance={Math.hypot(relX, relY, relZ)}
+              />
+            )}
+          </React.Fragment>
         );
       })}
     </group>

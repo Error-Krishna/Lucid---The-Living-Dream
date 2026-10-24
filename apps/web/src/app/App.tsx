@@ -9,12 +9,16 @@ import { FeedbackModal } from '../features/feedback/FeedbackModal.js';
 import { ControlsHelpModal } from '../features/ui/ControlsHelpModal.js';
 import { UniverseMapModal } from '../features/ui/UniverseMapModal.js';
 import { TransitionOverlay } from '../features/ui/TransitionOverlay.js';
+import { FirstVisitIntroModal } from '../features/ui/FirstVisitIntroModal.js';
 import { Sparkles } from 'lucide-react';
 
 export function App() {
   const viewMode = useUniverseStore((s) => s.viewMode);
   const activeDiscovery = useUniverseStore((s) => s.activeDiscoveryNotice);
   const dismissDiscovery = useUniverseStore((s) => s.dismissDiscoveryNotice);
+  const isIntroOpen = useUniverseStore((s) => s.isIntroOpen);
+  const setIntroOpen = useUniverseStore((s) => s.setIntroOpen);
+  const restartTutorial = useUniverseStore((s) => s.restartTutorial);
 
   return (
     <div className="w-full h-screen bg-[#030514] text-slate-100 select-none overflow-hidden relative font-sans">
@@ -51,6 +55,14 @@ export function App() {
       <FlightSequenceOverlay />
 
       {/* Global Modals accessible from any view */}
+      <FirstVisitIntroModal
+        isOpen={isIntroOpen}
+        onClose={() => setIntroOpen(false)}
+        onStartTutorial={() => {
+          setIntroOpen(false);
+          restartTutorial();
+        }}
+      />
       <FeedbackModal />
       <ControlsHelpModal />
       <UniverseMapModal />

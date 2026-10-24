@@ -37,8 +37,15 @@ export interface DiscoveryRecord {
 }
 
 const getSafeStorage = () => {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage;
+    }
+    if (typeof globalThis !== 'undefined' && (globalThis as any).localStorage) {
+      return (globalThis as any).localStorage;
+    }
+  } catch {
+    // Restricted environment or private browsing mode
   }
   return {
     getItem: () => null,
@@ -198,6 +205,13 @@ interface UniverseState {
   toggleMap: () => void;
   setChatOpen: (open: boolean) => void;
   setProfileOpen: (open: boolean) => void;
+
+  // Introduction & Onboarding
+  isIntroOpen: boolean;
+  setIntroOpen: (open: boolean) => void;
+  flightSensitivity: 'default' | 'smooth' | 'agile';
+  setFlightSensitivity: (preset: 'default' | 'smooth' | 'agile') => void;
+  restartTutorial: () => void;
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -305,7 +319,25 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
     headingAssistance: false,
     approachAssistance: false,
     flightTutorialStep: 0,
-    isTutorialVisible: true,
+    isTutorialVisible: !storage.getItem('lucid_tutorial_completed_v1'),
+    isIntroOpen: getSafeStorage().getItem('lucid_intro_seen_v1') !== 'true',
+    setIntroOpen: (open: boolean) => {
+      if (!open) {
+        getSafeStorage().setItem('lucid_intro_seen_v1', 'true');
+      }
+      set({ isIntroOpen: open });
+    },
+    flightSensitivity: (getSafeStorage().getItem('lucid_flight_sensitivity') || 'default') as
+      | 'default'
+      | 'smooth'
+      | 'agile',
+    setFlightSensitivity: (preset: 'default' | 'smooth' | 'agile') => {
+      getSafeStorage().setItem('lucid_flight_sensitivity', preset);
+      set({ flightSensitivity: preset });
+    },
+    restartTutorial: () => {
+      set({ flightTutorialStep: 0, isTutorialVisible: true });
+    },
     isScanning: false,
     discoveredPlanets: { origin: true },
     throttle: 0.35,

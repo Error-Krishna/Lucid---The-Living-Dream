@@ -66,6 +66,12 @@ export interface PlanetMetadata {
   };
   startingSpawn: [number, number, number];
   landingPadPosition: [number, number, number];
+  narrative?: {
+    theme: string;
+    fictionalDescription: string;
+    projectVision: string;
+    suggestedActivity: string;
+  };
 }
 
 export type TravelState =
@@ -275,6 +281,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'The beginning of a universe.',
+      fictionalDescription:
+        'Every journey begins somewhere. Origin is the first glimpse into a universe still taking shape.',
+      projectVision:
+        'This world represents LUCID’s foundation: connecting exploration, identity, and the feeling of entering a place that can continue to evolve.',
+      suggestedActivity:
+        'Begin your journey and learn the fundamentals of navigation.',
+    },
   },
   candyverse: {
     id: 'candyverse',
@@ -316,6 +331,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 4],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Playfulness and imaginative environments.',
+      fictionalDescription:
+        'A surreal landscape where familiar shapes become unfamiliar and imagination takes physical form.',
+      projectVision:
+        'We want LUCID to support worlds with distinct identities, each creating a different emotional experience.',
+      suggestedActivity:
+        'Explore the unusual terrain and observe the world’s visual details.',
+    },
   },
   pixel: {
     id: 'pixel',
@@ -356,6 +380,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Digital identity and experimentation.',
+      fictionalDescription:
+        'A world that embraces the strange beauty of digital structures and synthetic landscapes.',
+      projectVision:
+        'This world explores how different visual styles and creative identities could coexist within one larger universe.',
+      suggestedActivity:
+        'Look for distinctive structures and environmental patterns.',
+    },
   },
   nature: {
     id: 'nature',
@@ -396,6 +429,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Nature, life, and discovery.',
+      fictionalDescription:
+        'A world where natural forms and unfamiliar environments invite slower exploration.',
+      projectVision:
+        'We want exploration to be more than travel between destinations. Each world should reward curiosity.',
+      suggestedActivity:
+        'Land safely and explore the environment on foot.',
+    },
   },
   glassia: {
     id: 'glassia',
@@ -437,6 +479,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Reflection, transparency, and atmosphere.',
+      fictionalDescription:
+        'A crystalline world where light, reflection, and the environment shape the experience.',
+      projectVision:
+        'This world helps us explore how atmosphere, lighting, and environmental detail can give each destination its own character.',
+      suggestedActivity:
+        'Observe how the world changes as you approach its surface.',
+    },
   },
   abyss: {
     id: 'abyss',
@@ -477,6 +528,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Mystery and the unknown.',
+      fictionalDescription:
+        'A mysterious destination where the darkness invites exploration without revealing everything at once.',
+      projectVision:
+        'We want discovery to create curiosity. Future versions of LUCID could make exploration more meaningful through secrets, stories, and shared discoveries.',
+      suggestedActivity:
+        'Approach carefully and investigate what you can see.',
+    },
   },
   zephyr: {
     id: 'zephyr',
@@ -518,6 +578,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Movement and freedom.',
+      fictionalDescription:
+        'A world defined by movement, openness, and the sensation of travelling through unfamiliar space.',
+      projectVision:
+        'This world represents the importance of freedom of movement and expressive navigation within a large virtual environment.',
+      suggestedActivity:
+        'Practice manoeuvring and observe the surrounding environment.',
+    },
   },
   ignis: {
     id: 'ignis',
@@ -558,6 +627,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Energy and intensity.',
+      fictionalDescription:
+        'A dramatic world shaped by heat, light, and powerful environmental contrasts.',
+      projectVision:
+        'We want every destination to feel mechanically and visually distinct rather than simply changing its color palette.',
+      suggestedActivity:
+        'Observe the atmosphere and approach the planet with care.',
+    },
   },
   astraea: {
     id: 'astraea',
@@ -599,6 +677,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Wonder and distant discovery.',
+      fictionalDescription:
+        'A distant world that reminds explorers how much remains beyond the places they already know.',
+      projectVision:
+        'The larger LUCID universe should encourage long-term exploration and give players reasons to return.',
+      suggestedActivity:
+        'Use the navigation instruments to plan your next destination.',
+    },
   },
   chronos: {
     id: 'chronos',
@@ -640,6 +727,15 @@ export const PLANET_CATALOG: Record<PlanetId, PlanetMetadata> = {
     },
     startingSpawn: [0, 0.0, 5],
     landingPadPosition: [0, 0.2, 6],
+    narrative: {
+      theme: 'Time and persistence.',
+      fictionalDescription:
+        'A world that invites reflection on change, continuity, and the passage of time.',
+      projectVision:
+        'One of LUCID’s long-term ambitions is a universe that can retain meaningful changes rather than resetting every time someone leaves.',
+      suggestedActivity:
+        'Explore the world and consider what a persistent universe could become.',
+    },
   },
 };
 

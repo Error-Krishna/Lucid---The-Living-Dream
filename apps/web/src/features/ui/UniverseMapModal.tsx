@@ -154,11 +154,26 @@ export function UniverseMapModal() {
                   <p className="text-[11px] text-cyan-200/80 mb-2 font-medium line-clamp-1">
                     {isDiscovered ? p.tagline : 'Signal detected on deep spectrum'}
                   </p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3 line-clamp-2">
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-2.5 line-clamp-2">
                     {isDiscovered
-                      ? p.description
+                      ? p.narrative?.fictionalDescription || p.description
                       : 'Deploy sector scanner [F] or approach within sensor radius to decipher planetary atmosphere and composition.'}
                   </p>
+
+                  {/* Planet Narrative & Project Vision */}
+                  {isDiscovered && p.narrative && (
+                    <div className="mb-3 p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-[10px] space-y-1">
+                      <div className="text-cyan-300 font-bold tracking-wider uppercase text-[9px]">
+                        LUCID Vision:
+                      </div>
+                      <p className="text-slate-300 leading-tight">
+                        {p.narrative.projectVision}
+                      </p>
+                      <div className="text-emerald-400 font-mono text-[9px] pt-1 border-t border-slate-800">
+                        Activity: {p.narrative.suggestedActivity}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 mt-auto">

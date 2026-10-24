@@ -63,10 +63,6 @@ export function FlightGuidanceHUD({
   const landingAssistance = useUniverseStore((s) => s.landingAssistance);
   const toggleLandingAssistance = useUniverseStore((s) => s.toggleLandingAssistance);
   const radarAltitude = useUniverseStore((s) => s.radarAltitude);
-  const flightTutorialStep = useUniverseStore((s) => s.flightTutorialStep);
-  const setFlightTutorialStep = useUniverseStore((s) => s.setFlightTutorialStep);
-  const isTutorialVisible = useUniverseStore((s) => s.isTutorialVisible);
-  const setIsTutorialVisible = useUniverseStore((s) => s.setIsTutorialVisible);
 
   const {
     headingDeg,
@@ -103,38 +99,6 @@ export function FlightGuidanceHUD({
       : pitchErrorDeg > 0
       ? `PITCH UP ${Math.round(pitchErrorDeg)}° [PULL]`
       : `PITCH DOWN ${Math.round(Math.abs(pitchErrorDeg))}° [PUSH]`;
-
-  // Tutorial stages
-  const tutorialSteps = [
-    {
-      title: '1. Throttle & Thrust',
-      desc: 'Hold [W] to increase throttle and generate forward thrust. Hold [S] to reduce speed.',
-    },
-    {
-      title: '2. Directional Steering',
-      desc: 'Move your mouse or hold [A] / [D] to turn your spacecraft in full 360° space.',
-    },
-    {
-      title: '3. Select Navigation Target',
-      desc: 'Press [Tab] or [M] (Starmap) to choose a celestial world to navigate toward.',
-    },
-    {
-      title: '4. Align Nose with Target',
-      desc: 'Turn your nose crosshair [+] toward the planet reticle until VECTOR ALIGNED illuminates green.',
-    },
-    {
-      title: '5. Verify Flight Path (Velocity)',
-      desc: 'Watch the circular Flight Path Marker (-◯-). Correct lateral drift by adjusting your thrust angle.',
-    },
-    {
-      title: '6. Orbital Approach & Deceleration',
-      desc: 'As you close distance, reduce throttle below 70 km/s before entering the atmosphere.',
-    },
-    {
-      title: '7. Deploy Landing Gear & Touchdown',
-      desc: 'Press [G] to deploy landing gear. Keep descent rate under 14 m/s to touch down safely.',
-    },
-  ];
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20 select-none overflow-hidden font-mono">
@@ -375,10 +339,10 @@ export function FlightGuidanceHUD({
               </div>
             </div>
           ) : (
-            /* Target Planet is off-screen or behind the craft */
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              {/* Large Guidance Correction Badge */}
-              <div className="glass-panel p-4 rounded-2xl border border-amber-400/80 bg-slate-950/95 shadow-2xl max-w-sm text-center animate-pulse pointer-events-auto">
+            /* Target Planet is off-screen or behind the craft — positioned safely away from crosshair */
+            <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none z-20">
+              {/* Guidance Correction Badge */}
+              <div className="glass-panel p-3.5 rounded-2xl border border-amber-400/80 bg-slate-950/95 shadow-2xl max-w-sm text-center animate-pulse pointer-events-auto">
                 <div className="flex items-center justify-center gap-2 mb-1.5 text-amber-300 text-xs font-bold uppercase">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                   <span>
@@ -588,60 +552,6 @@ export function FlightGuidanceHUD({
           </div>
         </div>
       </div>
-
-      {/* ============================================================== */}
-      {/* 7. STEP-BY-STEP INTERACTIVE FLIGHT TUTORIAL PILL (Top-Left)    */}
-      {/* ============================================================== */}
-      {isTutorialVisible && (
-        <div className="absolute top-28 left-6 max-w-xs pointer-events-auto">
-          <div className="glass-panel p-3.5 rounded-2xl border border-cyan-500/40 bg-slate-950/95 shadow-2xl">
-            <div className="flex items-center justify-between text-[10px] text-cyan-400 font-bold border-b border-slate-800 pb-1 mb-2">
-              <span className="flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />
-                <span>PILOT FLIGHT TUTORIAL</span>
-              </span>
-              <button
-                onClick={() => setIsTutorialVisible(false)}
-                className="hover:text-white p-0.5"
-                title="Dismiss Tutorial"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="text-white text-xs font-bold mb-1">
-              {tutorialSteps[flightTutorialStep]?.title}
-            </div>
-            <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
-              {tutorialSteps[flightTutorialStep]?.desc}
-            </p>
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10px]">
-              <button
-                disabled={flightTutorialStep === 0}
-                onClick={() => setFlightTutorialStep(Math.max(0, flightTutorialStep - 1))}
-                className="text-slate-400 hover:text-white disabled:opacity-30"
-              >
-                ◀ Prev
-              </button>
-              <span className="text-slate-500">
-                {flightTutorialStep + 1} / {tutorialSteps.length}
-              </span>
-              <button
-                disabled={flightTutorialStep === tutorialSteps.length - 1}
-                onClick={() =>
-                  setFlightTutorialStep(
-                    Math.min(tutorialSteps.length - 1, flightTutorialStep + 1)
-                  )
-                }
-                className="text-cyan-400 hover:text-cyan-300 disabled:opacity-30 font-bold"
-              >
-                Next ▶
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
