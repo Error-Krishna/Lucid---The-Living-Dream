@@ -11,6 +11,11 @@ import {
 } from './modules/world/worldController.js';
 import { submitFeedback, exportFeedback } from './modules/feedback/feedbackController.js';
 import { worldStore } from './storage/worldStore.js';
+import {
+  isDatabaseActive,
+  isDatabaseHealthy,
+  getFeedbackCollection,
+} from './storage/mongodb.js';
 
 export function createApp() {
   const app = express();
@@ -38,16 +43,77 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
 
   // Health check endpoint
-  app.get('/api/health', (_req, res) => {
-    const stats = worldStore.getStats();
-    res.json({
+  app.get('/api/health', async (_req, res) => {
+    const worldStats = worldStore.getStats();
+    const isDbActive = isDatabaseActive();
+
+    if (isDbActive) {
+      try {
+        const isHealthy = await isDatabaseHealthy();
+        if (!isHealthy) {
+          return res.status(503).json({
+            status: 'unhealthy',
+            service: 'LUCID-Universe-Engine',
+            version: '1.0.0-mvp',
+            timestamp: new Date().toISOString(),
+            mode: 'connected-mongodb',
+            database: 'disconnected',
+            error: 'Database connection unavailable',
+            stats: {
+              totalWorlds: worldStats.totalWorlds,
+              totalObjects: worldStats.totalObjects,
+              totalFeedback: 0,
+            },
+          });
+        }
+
+        const collection = getFeedbackCollection();
+        const totalFeedback = await collection.countDocuments();
+
+        return res.json({
+          status: 'healthy',
+          service: 'LUCID-Universe-Engine',
+          version: '1.0.0-mvp',
+          timestamp: new Date().toISOString(),
+          mode: 'connected-mongodb',
+          database: 'connected',
+          stats: {
+            totalWorlds: worldStats.totalWorlds,
+            totalObjects: worldStats.totalObjects,
+            totalFeedback,
+          },
+        });
+      } catch {
+        return res.status(503).json({
+          status: 'unhealthy',
+          service: 'LUCID-Universe-Engine',
+          version: '1.0.0-mvp',
+          timestamp: new Date().toISOString(),
+          mode: 'connected-mongodb',
+          database: 'error',
+          error: 'Database query failed',
+          stats: {
+            totalWorlds: worldStats.totalWorlds,
+            totalObjects: worldStats.totalObjects,
+            totalFeedback: 0,
+          },
+        });
+      }
+    }
+
+    // Default when MongoDB URI is not set in environment (e.g. local offline demo)
+    return res.json({
       status: 'healthy',
       service: 'LUCID-Universe-Engine',
       version: '1.0.0-mvp',
       timestamp: new Date().toISOString(),
-      mode: config.mongodbUri ? 'connected-mongodb' : 'connected-memory',
-      database: config.mongodbUri ? 'connected' : 'in-memory-authoritative',
-      stats,
+      mode: 'connected-memory',
+      database: 'in-memory-authoritative',
+      stats: {
+        totalWorlds: worldStats.totalWorlds,
+        totalObjects: worldStats.totalObjects,
+        totalFeedback: 0,
+      },
     });
   });
 

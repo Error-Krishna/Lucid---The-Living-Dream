@@ -6,4 +6,5 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   mongodbUri: process.env.MONGODB_URI || '',
+  mongodbDbName: process.env.MONGODB_DB_NAME || 'lucid',
 };
