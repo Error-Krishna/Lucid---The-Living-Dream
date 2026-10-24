@@ -6,6 +6,7 @@ import { CockpitInterior } from './CockpitInterior.js';
 import { FlightGuidanceHUD, FlightTelemetry } from './FlightGuidanceHUD.js';
 import { soundEngine } from '../../lib/sound.js';
 import { useUniverseStore } from '../../stores/useUniverseStore.js';
+import { getPlanetEnvironment } from '../planets/planetEnvironmentConfig.js';
 import {
   PLANET_CATALOG,
   PlanetId,
@@ -326,6 +327,10 @@ export function CockpitFlightScene() {
     setIsMuted(muted);
   };
 
+  const envConfig = getPlanetEnvironment(activePlanet);
+  const isAtmospheric =
+    flightMode === 'atmospheric_entry' || flightMode === 'descent' || flightMode === 'landed';
+
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black select-none">
       {/* 3D WebGL Canvas */}
@@ -338,11 +343,31 @@ export function CockpitFlightScene() {
           toneMappingExposure: 1.15,
         }}
       >
-        {/* Deep Starfield Outside Windshield */}
+        {/* Dynamic Starfield & Atmospheric Windshield Background */}
         <Stars radius={200} depth={100} count={4500} factor={4.0} saturation={0.9} fade />
-        <color attach="background" args={['#02040c']} />
-        <directionalLight position={[40, 20, -50]} intensity={1.5} color="#fff" />
-        <ambientLight intensity={0.25} />
+        <color
+          attach="background"
+          args={[isAtmospheric ? envConfig.sky.horizonColor : '#02040c']}
+        />
+        {isAtmospheric && (
+          <fog attach="fog" args={[envConfig.fog.color, 15, 120]} />
+        )}
+        <directionalLight
+          position={isAtmospheric ? [30, 45, -25] : [40, 20, -50]}
+          intensity={isAtmospheric ? envConfig.lighting.directionalIntensity : 1.6}
+          color={isAtmospheric ? envConfig.lighting.directionalColor : '#fff'}
+        />
+        <hemisphereLight
+          args={[
+            isAtmospheric ? envConfig.lighting.hemisphereSkyColor : '#38bdf8',
+            isAtmospheric ? envConfig.lighting.hemisphereGroundColor : '#02040c',
+            isAtmospheric ? envConfig.lighting.hemisphereIntensity * 0.7 : 0.4,
+          ]}
+        />
+        <ambientLight
+          intensity={isAtmospheric ? envConfig.lighting.ambientIntensity * 0.6 : 0.35}
+          color={isAtmospheric ? envConfig.lighting.ambientColor : '#94a3b8'}
+        />
 
         {/* Continuous 3D Spacecraft Physics & Atmospheric Controller */}
         <PhysicalFlightController

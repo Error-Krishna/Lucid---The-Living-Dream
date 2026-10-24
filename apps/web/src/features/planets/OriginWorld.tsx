@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Stars, Float, Text, Billboard } from '@react-three/drei';
+import { Float, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import { PlanetaryAtmosphereAndSun } from './PlanetaryAtmosphereAndSun.js';
+import { getPlanetEnvironment } from './planetEnvironmentConfig.js';
 import { RocketLandingPad } from '../spacecraft/RocketLandingPad.js';
 import { DetailedTerrain } from '../world/DetailedTerrain.js';
 import { ModelAsset } from '../world/ModelAsset.js';
@@ -21,6 +23,7 @@ export function OriginWorld({
   const landmarkRingRef = useRef<THREE.Mesh>(null);
   const coreRef = useRef<THREE.Group>(null);
 
+  const envConfig = getPlanetEnvironment(planetId);
   const planetMeta = PLANET_CATALOG[planetId] || PLANET_CATALOG['origin'];
   const theme = planetMeta.visualTheme;
 
@@ -36,55 +39,42 @@ export function OriginWorld({
 
   return (
     <group>
-      {/* Sky & Atmosphere matching planet theme */}
-      <color attach="background" args={[theme.skyColor || '#060818']} />
-      <fog attach="fog" args={[theme.fogColor || '#0b1028', 20, 85]} />
-
-      {/* Sun & Environmental Lighting */}
-      <ambientLight intensity={0.55} color={theme.ambientLightColor || '#94a3b8'} />
-      <hemisphereLight args={[theme.accentColor || '#a5b4fc', '#1e293b', 0.6]} />
-      <directionalLight
-        position={[25, 45, 20]}
-        intensity={1.4}
-        color={theme.sunColor || '#e0e7ff'}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={0.5}
-        shadow-camera-far={100}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-        shadow-bias={-0.0001}
-      />
-
-      {/* Atmospheric Starfields */}
-      <Stars radius={90} depth={60} count={3200} factor={4} saturation={0.6} fade />
+      {/* Complete Planetary Atmosphere, Visible Sun & Soft Lighting System */}
+      <PlanetaryAtmosphereAndSun config={envConfig} />
 
       {/* Distant Ringed Moon in the Celestial Sky */}
-      <group position={[-35, 28, -60]}>
+      <group position={[-50, 55, -95]}>
         <mesh>
-          <sphereGeometry args={[7, 32, 32]} />
+          <sphereGeometry args={[11, 32, 32]} />
           <meshStandardMaterial
             color="#cbd5e1"
-            emissive="#38bdf8"
-            emissiveIntensity={0.15}
-            roughness={0.6}
+            emissive={envConfig.sun.coronaColor}
+            emissiveIntensity={0.25}
+            roughness={0.55}
           />
         </mesh>
         <mesh rotation={[1.2, 0.4, 0]}>
-          <ringGeometry args={[9.5, 14, 48]} />
+          <ringGeometry args={[15, 23, 48]} />
           <meshBasicMaterial
-            color="#818cf8"
+            color={theme.accentColor || '#818cf8'}
             side={THREE.DoubleSide}
             transparent
-            opacity={0.4}
+            opacity={0.5}
           />
         </mesh>
       </group>
 
-      {/* PBR Textured Detailed Terrain */}
-      <DetailedTerrain radius={30} textureType="rocky" groundColor="#334155" />
+      {/* PBR Textured Detailed Terrain with Seamless Horizon Skirt */}
+      <DetailedTerrain
+        radius={36}
+        skirtRadius={190}
+        textureType={envConfig.terrain.textureType}
+        groundColor={envConfig.terrain.groundColor}
+        skirtColor={envConfig.terrain.skirtColor}
+        showHorizonRidges={true}
+        ridgeColor={envConfig.horizon.color}
+        ridgeHeight={envConfig.horizon.height}
+      />
 
       {/* The Landing Zone with the Spacecraft on Pad */}
       <RocketLandingPad position={[-6.5, 0, 4]} isNearRocket={isNearRocket} />
@@ -221,7 +211,7 @@ export function OriginWorld({
             outlineWidth={0.045}
             outlineColor="#030514"
           >
-            THE MONOLITH OF ORIGIN
+            {planetMeta.landmark.name.toUpperCase()}
           </Text>
           <Text
             position={[0, -0.45, 0]}
@@ -230,8 +220,10 @@ export function OriginWorld({
             anchorX="center"
             outlineWidth={0.03}
             outlineColor="#030514"
+            maxWidth={8}
+            textAlign="center"
           >
-            Ancient Celestial Nexus • Press [E] to Commune
+            {`${planetMeta.landmark.lore} • Press [E]`}
           </Text>
         </Billboard>
       </group>

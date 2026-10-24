@@ -15,9 +15,22 @@ import { worldStore } from './storage/worldStore.js';
 export function createApp() {
   const app = express();
 
+  const allowedOrigins =
+    config.clientOrigin === '*'
+      ? true
+      : [
+          ...new Set([
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+            'http://localhost:5174',
+            'http://127.0.0.1:5174',
+            ...(config.clientOrigin ? config.clientOrigin.split(',').map((s) => s.trim()) : []),
+          ]),
+        ];
+
   app.use(
     cors({
-      origin: config.clientOrigin === '*' ? true : [config.clientOrigin, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: allowedOrigins,
       credentials: true,
     })
   );

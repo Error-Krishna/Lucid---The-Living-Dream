@@ -2,7 +2,10 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Float, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import { PlanetaryAtmosphereAndSun } from './PlanetaryAtmosphereAndSun.js';
+import { PLANET_ENVIRONMENTS } from './planetEnvironmentConfig.js';
 import { RocketLandingPad } from '../spacecraft/RocketLandingPad.js';
+import { DetailedTerrain } from '../world/DetailedTerrain.js';
 
 interface PixelWorldProps {
   playerPosition: [number, number, number];
@@ -21,27 +24,30 @@ export function PixelWorld({
     }
   });
 
+  const envConfig = PLANET_ENVIRONMENTS.pixel;
+
   return (
     <group>
-      {/* Sky & Grid Atmosphere */}
-      <color attach="background" args={['#040b17']} />
-      <fog attach="fog" args={['#07182c', 14, 55]} />
-      <ambientLight intensity={0.8} color="#6ee7b7" />
-      <directionalLight position={[-20, 25, 10]} intensity={1.2} color="#34d399" />
-      <pointLight position={[0, 8, -10]} intensity={2.2} color="#10b981" distance={28} />
+      {/* Complete Planetary Atmosphere, Visible Sun & Soft Lighting System */}
+      <PlanetaryAtmosphereAndSun config={envConfig} />
 
-      {/* Stepped Voxel Ground Plane */}
-      <mesh position={[0, -0.5, 0]}>
-        <boxGeometry args={[44, 1, 44]} />
-        <meshStandardMaterial
-          color="#06203a"
-          roughness={0.8}
-          metalness={0.2}
-        />
-      </mesh>
+      {/* Stepped Voxel Terrain with Expansive Horizon Skirt */}
+      <DetailedTerrain
+        radius={36}
+        skirtRadius={185}
+        textureType="rocky"
+        groundColor={envConfig.terrain.groundColor}
+        skirtColor={envConfig.terrain.skirtColor}
+        showHorizonRidges={true}
+        ridgeColor={envConfig.horizon.color}
+        ridgeHeight={20}
+      />
+
+      {/* Landing Zone with Spacecraft */}
+      <RocketLandingPad position={[-6.5, 0, 4]} isNearRocket={isNearRocket} />
 
       {/* Digital Grid Lines */}
-      <gridHelper args={[44, 22, '#10b981', '#0a3652']} position={[0, 0.01, 0]} />
+      <gridHelper args={[70, 35, '#10b981', '#0a3652']} position={[0, 0.05, 0]} />
 
       {/* Stepping Voxel Terraces */}
       {[

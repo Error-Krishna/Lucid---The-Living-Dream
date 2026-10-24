@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Float, Text, Billboard, Stars } from '@react-three/drei';
 import * as THREE from 'three';
+import { PlanetaryAtmosphereAndSun } from './PlanetaryAtmosphereAndSun.js';
+import { PLANET_ENVIRONMENTS } from './planetEnvironmentConfig.js';
 import { RocketLandingPad } from '../spacecraft/RocketLandingPad.js';
 import { DetailedTerrain } from '../world/DetailedTerrain.js';
 import { ModelAsset } from '../world/ModelAsset.js';
@@ -35,58 +37,48 @@ export function CandyverseWorld({
     }
   });
 
+  const envConfig = PLANET_ENVIRONMENTS.candyverse;
+
   return (
     <group>
-      {/* Sky & Confectionery Atmospheric Depth */}
-      <color attach="background" args={['#240931']} />
-      <fog attach="fog" args={['#3d1547', 22, 85]} />
-
-      {/* Warm Golden Key Sun with PCF Soft Shadows */}
-      <ambientLight intensity={0.55} color="#fce7f3" />
-      <hemisphereLight args={['#f472b6', '#3b0764', 0.65]} />
-      <directionalLight
-        position={[32, 45, -22]}
-        intensity={1.85}
-        color="#fff7ed"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={0.5}
-        shadow-camera-far={95}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-        shadow-bias={-0.0001}
-      />
-
-      <Stars radius={85} depth={55} count={2600} factor={3.2} saturation={0.85} fade />
+      {/* Complete Planetary Atmosphere, Visible Sun & Soft Lighting System */}
+      <PlanetaryAtmosphereAndSun config={envConfig} />
 
       {/* Distant Celestial Ringed Confection Moon in the Sky */}
-      <group position={[-25, 32, -45]} rotation={[0.4, 0.3, 0]}>
+      <group position={[-55, 62, -95]} rotation={[0.4, 0.3, 0]}>
         <mesh ref={distantMoonRef}>
-          <sphereGeometry args={[7.5, 32, 32]} />
+          <sphereGeometry args={[12, 32, 32]} />
           <meshStandardMaterial
             color="#fbcfe8"
-            emissive="#831843"
-            emissiveIntensity={0.25}
-            roughness={0.4}
+            emissive="#be185d"
+            emissiveIntensity={0.35}
+            roughness={0.35}
             metalness={0.1}
           />
         </mesh>
         {/* Pastel Ring System */}
         <mesh rotation={[1.1, 0.4, 0]}>
-          <ringGeometry args={[11, 16.5, 64]} />
+          <ringGeometry args={[16, 26, 64]} />
           <meshBasicMaterial
             color="#f472b6"
             transparent
-            opacity={0.55}
+            opacity={0.65}
             side={THREE.DoubleSide}
           />
         </mesh>
       </group>
 
-      {/* Powdered Sugar & Strawberry Cream Dune Terrain */}
-      <DetailedTerrain radius={32} textureType="candy" groundColor="#f3c4db" />
+      {/* Powdered Sugar & Strawberry Cream Dune Terrain with Seamless Horizon Skirt */}
+      <DetailedTerrain
+        radius={36}
+        skirtRadius={190}
+        textureType="candy"
+        groundColor={envConfig.terrain.groundColor}
+        skirtColor={envConfig.terrain.skirtColor}
+        showHorizonRidges={true}
+        ridgeColor={envConfig.horizon.color}
+        ridgeHeight={24}
+      />
 
       {/* Reinforced Landing Zone with Parked Exploration Lander */}
       <RocketLandingPad position={[-6.5, 0, 4]} isNearRocket={isNearRocket} />

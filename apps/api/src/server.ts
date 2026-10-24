@@ -7,9 +7,22 @@ import { config } from './config/index.js';
 const app = createApp();
 const server = http.createServer(app);
 
+const allowedOrigins =
+  config.clientOrigin === '*'
+    ? true
+    : [
+        ...new Set([
+          'http://localhost:5173',
+          'http://127.0.0.1:5173',
+          'http://localhost:5174',
+          'http://127.0.0.1:5174',
+          ...(config.clientOrigin ? config.clientOrigin.split(',').map((s) => s.trim()) : []),
+        ]),
+      ];
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: config.clientOrigin === '*' ? true : [config.clientOrigin, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
   },

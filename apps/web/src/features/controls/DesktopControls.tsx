@@ -323,10 +323,10 @@ export function DesktopControls({ onMoveUpdate }: DesktopControlsProps) {
 
     // Natural perimeter boundary constraint
     const distFromCenter = Math.hypot(position.current.x, position.current.z);
-    if (distFromCenter > 25.5) {
+    if (distFromCenter > 33.5) {
       const angle = Math.atan2(position.current.z, position.current.x);
-      position.current.x = Math.cos(angle) * 25.4;
-      position.current.z = Math.sin(angle) * 25.4;
+      position.current.x = Math.cos(angle) * 33.4;
+      position.current.z = Math.sin(angle) * 33.4;
     }
 
     // Graceful recovery if falling out of recoverable bounds
@@ -342,7 +342,7 @@ export function DesktopControls({ onMoveUpdate }: DesktopControlsProps) {
     // Proximity checking for Rocket & Landmark
     // -------------------------------------------------------------
     const distToRocket = Math.hypot(position.current.x - (-6.5), position.current.z - 4);
-    if (distToRocket < 4.5) {
+    if (distToRocket < 4.8) {
       setIsNearRocket(true);
       setContextPrompt('Board Spacecraft Cockpit [E]');
     } else {
@@ -352,11 +352,23 @@ export function DesktopControls({ onMoveUpdate }: DesktopControlsProps) {
         position.current.x - landmarkPos[0],
         position.current.z - landmarkPos[2]
       );
-      if (distToLandmark < 4.5) {
+      if (distToLandmark < 5.0) {
         setContextPrompt(`${PLANET_CATALOG[activePlanet]?.landmark.actionPrompt} [E]`);
       } else {
-        // Do not wipe creature or flora prompts if active
-        // contextPrompt is managed elsewhere if near entities
+        if (
+          contextPrompt?.includes('Spacecraft') ||
+          contextPrompt?.includes('channel') ||
+          contextPrompt?.includes('Awaken') ||
+          contextPrompt?.includes('Attune') ||
+          contextPrompt?.includes('Refract') ||
+          contextPrompt?.includes('Commune') ||
+          contextPrompt?.includes('Sync') ||
+          contextPrompt?.includes('Wind') ||
+          contextPrompt?.includes('Kindle') ||
+          contextPrompt?.includes('Resonate')
+        ) {
+          setContextPrompt(null);
+        }
       }
     }
 

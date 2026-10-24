@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Float, Text, Billboard, Stars } from '@react-three/drei';
+import { Float, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import { PlanetaryAtmosphereAndSun } from './PlanetaryAtmosphereAndSun.js';
+import { PLANET_ENVIRONMENTS } from './planetEnvironmentConfig.js';
 import { RocketLandingPad } from '../spacecraft/RocketLandingPad.js';
 import { DetailedTerrain } from '../world/DetailedTerrain.js';
 import { ModelAsset } from '../world/ModelAsset.js';
@@ -28,34 +30,24 @@ export function GlassiaWorld({
     }
   });
 
+  const envConfig = PLANET_ENVIRONMENTS.glassia;
+
   return (
     <group>
-      {/* Sky & Crystalline Atmosphere */}
-      <color attach="background" args={['#040c1a']} />
-      <fog attach="fog" args={['#081e36', 20, 80]} />
+      {/* Complete Planetary Atmosphere, Visible Sun & Soft Lighting System */}
+      <PlanetaryAtmosphereAndSun config={envConfig} />
 
-      {/* Prismatic Cyan Lighting */}
-      <ambientLight intensity={0.65} color="#93c5fd" />
-      <hemisphereLight args={['#7dd3fc', '#0c2340', 0.6]} />
-      <directionalLight
-        position={[20, 40, 15]}
-        intensity={1.5}
-        color="#e0f2fe"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={0.5}
-        shadow-camera-far={90}
-        shadow-camera-left={-28}
-        shadow-camera-right={28}
-        shadow-camera-top={28}
-        shadow-camera-bottom={-28}
-        shadow-bias={-0.0001}
+      {/* Textured Crystalline Terrain with Seamless Horizon Skirt */}
+      <DetailedTerrain
+        radius={36}
+        skirtRadius={190}
+        textureType="rocky"
+        groundColor={envConfig.terrain.groundColor}
+        skirtColor={envConfig.terrain.skirtColor}
+        showHorizonRidges={true}
+        ridgeColor={envConfig.horizon.color}
+        ridgeHeight={28}
       />
-
-      <Stars radius={80} depth={50} count={3000} factor={4} saturation={0.8} fade />
-
-      {/* Textured Crystalline Terrain */}
-      <DetailedTerrain radius={30} textureType="rocky" groundColor="#0c2340" />
 
       {/* Landing Zone with Parked Spacecraft */}
       <RocketLandingPad position={[-6.5, 0, 4]} isNearRocket={isNearRocket} />

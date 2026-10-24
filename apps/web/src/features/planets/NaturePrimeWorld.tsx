@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Float, Text, Billboard, Stars } from '@react-three/drei';
+import { Float, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import { PlanetaryAtmosphereAndSun } from './PlanetaryAtmosphereAndSun.js';
+import { PLANET_ENVIRONMENTS } from './planetEnvironmentConfig.js';
 import { RocketLandingPad } from '../spacecraft/RocketLandingPad.js';
 import { DetailedTerrain } from '../world/DetailedTerrain.js';
 import { ModelAsset } from '../world/ModelAsset.js';
@@ -27,34 +29,24 @@ export function NaturePrimeWorld({
     }
   });
 
+  const envConfig = PLANET_ENVIRONMENTS.nature;
+
   return (
     <group>
-      {/* Sky & Forest Canopy Atmosphere */}
-      <color attach="background" args={['#04140d']} />
-      <fog attach="fog" args={['#072418', 20, 80]} />
+      {/* Complete Planetary Atmosphere, Visible Sun & Soft Lighting System */}
+      <PlanetaryAtmosphereAndSun config={envConfig} />
 
-      {/* Bioluminescent Emerald Sunlight */}
-      <ambientLight intensity={0.65} color="#a7f3d0" />
-      <hemisphereLight args={['#6ee7b7', '#064e3b', 0.6]} />
-      <directionalLight
-        position={[15, 35, 20]}
-        intensity={1.4}
-        color="#d1fae5"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={0.5}
-        shadow-camera-far={90}
-        shadow-camera-left={-28}
-        shadow-camera-right={28}
-        shadow-camera-top={28}
-        shadow-camera-bottom={-28}
-        shadow-bias={-0.0001}
+      {/* Textured Lush Alien Terrain with Seamless Horizon Skirt */}
+      <DetailedTerrain
+        radius={36}
+        skirtRadius={190}
+        textureType="rocky"
+        groundColor={envConfig.terrain.groundColor}
+        skirtColor={envConfig.terrain.skirtColor}
+        showHorizonRidges={true}
+        ridgeColor={envConfig.horizon.color}
+        ridgeHeight={26}
       />
-
-      <Stars radius={80} depth={50} count={2800} factor={3} saturation={0.8} fade />
-
-      {/* Textured Lush Alien Terrain */}
-      <DetailedTerrain radius={30} textureType="rocky" groundColor="#064e3b" />
 
       {/* Landing Zone with Parked Spacecraft */}
       <RocketLandingPad position={[-6.5, 0, 4]} isNearRocket={isNearRocket} />

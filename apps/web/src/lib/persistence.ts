@@ -187,7 +187,13 @@ export class PersistenceManager {
   private apiUrl: string;
 
   constructor() {
-    this.apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    const defaultUrl =
+      typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+        ? window.location.origin
+        : 'http://localhost:4000';
+    this.apiUrl = import.meta.env.VITE_API_URL || defaultUrl;
   }
 
   // Load objects for a given planet
