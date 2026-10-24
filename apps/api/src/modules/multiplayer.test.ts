@@ -1,13 +1,45 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { io as ClientIO } from 'socket.io-client';
+import http from 'node:http';
+import { Server as SocketIOServer } from 'socket.io';
+import { createApp } from '../app.js';
+import { setupSocketHandlers } from './multiplayer/socketHandler.js';
 
 describe('Socket.IO Real-time Multiplayer Engine', () => {
+  let testServer: http.Server;
+  let testUrl: string;
+
+  beforeAll(async () => {
+    const app = createApp();
+    testServer = http.createServer(app);
+    const io = new SocketIOServer(testServer, {
+      cors: { origin: '*', methods: ['GET', 'POST'] },
+    });
+    setupSocketHandlers(io);
+
+    await new Promise<void>((resolve) => {
+      testServer.listen(0, () => {
+        const addr = testServer.address();
+        if (addr && typeof addr !== 'string') {
+          testUrl = `http://localhost:${addr.port}`;
+        }
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => {
+      testServer.close(() => resolve());
+    });
+  });
+
   it('connects two independent wanderers, synchronizes presence, movement and object commits', async () => {
-    const clientA = ClientIO('http://localhost:4000', {
+    const clientA = ClientIO(testUrl, {
       transports: ['websocket'],
       reconnection: false,
     });
-    const clientB = ClientIO('http://localhost:4000', {
+    const clientB = ClientIO(testUrl, {
       transports: ['websocket'],
       reconnection: false,
     });

@@ -48,7 +48,18 @@ export function setupSocketHandlers(io: SocketIOServer) {
       const room = `planet:${locationId}`;
       socket.join(room);
 
-      const spawn = initialPosition || PLANET_CATALOG[locationId].startingSpawn;
+      const defaultSpawn = PLANET_CATALOG[locationId].startingSpawn;
+      const spawn: [number, number, number] =
+        Array.isArray(initialPosition) &&
+        initialPosition.length === 3 &&
+        typeof initialPosition[0] === 'number' &&
+        typeof initialPosition[1] === 'number' &&
+        typeof initialPosition[2] === 'number' &&
+        !isNaN(initialPosition[0]) &&
+        !isNaN(initialPosition[1]) &&
+        !isNaN(initialPosition[2])
+          ? [initialPosition[0], initialPosition[1], initialPosition[2]]
+          : defaultSpawn;
       const session: ClientSession = {
         sessionId,
         userId: userId || `user-${sessionId.slice(0, 6)}`,
@@ -128,8 +139,17 @@ export function setupSocketHandlers(io: SocketIOServer) {
         ];
       }
 
-      if (Array.isArray(rotation) && rotation.length === 3) {
-        session.rotation = rotation;
+      if (
+        Array.isArray(rotation) &&
+        rotation.length === 3 &&
+        typeof rotation[0] === 'number' &&
+        typeof rotation[1] === 'number' &&
+        typeof rotation[2] === 'number' &&
+        !isNaN(rotation[0]) &&
+        !isNaN(rotation[1]) &&
+        !isNaN(rotation[2])
+      ) {
+        session.rotation = [rotation[0], rotation[1], rotation[2]];
       }
 
       if (emote) {
