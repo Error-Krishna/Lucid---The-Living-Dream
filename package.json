@@ -4,6 +4,10 @@
   "private": true,
   "description": "LUCID: The Living Dream - An interactive, persistent, multiplayer virtual universe",
   "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
     "dev:web": "pnpm --filter lucid-web dev",
@@ -16,5 +20,10 @@
   "devDependencies": {
     "puppeteer-core": "^25.15.0",
     "typescript": "^5.5.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
