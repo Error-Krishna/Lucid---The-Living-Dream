@@ -187,13 +187,23 @@ export class PersistenceManager {
   private apiUrl: string;
 
   constructor() {
-    const defaultUrl =
+    const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+    if (envUrl) {
+      this.apiUrl = envUrl.replace(/\/+$/, '');
+    } else if (
       typeof window !== 'undefined' &&
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1'
-        ? window.location.origin
-        : 'http://localhost:4000';
-    this.apiUrl = import.meta.env.VITE_API_URL || defaultUrl;
+      (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1')
+    ) {
+      this.apiUrl = 'http://localhost:4000';
+    } else {
+      // In production, default to relative origin so calls to /api/* are handled by host or Vercel proxy
+      this.apiUrl = '';
+    }
+  }
+
+  public getApiUrl(): string {
+    return this.apiUrl;
   }
 
   // Load objects for a given planet
@@ -275,55 +285,53 @@ export class PersistenceManager {
     return seeds;
   }
 
-  // Feedback submissions
+  // Feedback submissions — persists directly to MongoDB backend API
   public async submitFeedback(
-    submission: Omit<FeedbackSubmission, 'id' | 'submittedAt'>,
-    isConnected: boolean
+    submission: Omit<FeedbackSubmission, 'id' | 'submittedAt'>
   ): Promise<{ success: boolean; isRemote: boolean; id?: string; error?: string }> {
-    if (isConnected) {
-      try {
-        const res = await fetch(`${this.apiUrl}/api/feedback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(submission),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          return {
-            success: true,
-            isRemote: true,
-            id: data.submissionId,
-          };
-        }
-      } catch (err: any) {
-        console.warn('Remote feedback failed, saving locally', err);
-      }
-    }
-
-    // Save locally as draft
-    const draft: FeedbackSubmission = {
-      ...submission,
-      id: `local-fb-${Math.random().toString(36).slice(2, 9)}`,
-      submittedAt: new Date().toISOString(),
-      isLocal: true,
-    };
+    const baseUrl = this.apiUrl.replace(/\/+$/, '');
+    const endpoint = `${baseUrl}/api/feedback`;
 
     try {
-      const existingRaw = getSafeStorage().getItem(FEEDBACK_STORAGE_KEY);
-      const drafts: FeedbackSubmission[] = existingRaw ? JSON.parse(existingRaw) : [];
-      drafts.push(draft);
-      getSafeStorage().setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(drafts));
-      return {
-        success: true,
-        isRemote: false,
-        id: draft.id,
-      };
-    } catch (e: any) {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(submission),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          `Server returned status ${res.status} with non-JSON response. Please verify backend service.`
+        );
+      }
+
+      const data = await res.json();
+
+      if (res.ok && data?.success) {
+        return {
+          success: true,
+          isRemote: true,
+          id: data.submissionId || data.submission?.id,
+        };
+      }
+
+      const errorMessage =
+        data?.error || `Server responded with status ${res.status}`;
       return {
         success: false,
         isRemote: false,
-        error: e.message || 'Storage error',
+        error: errorMessage,
+      };
+    } catch (err: any) {
+      console.error('Remote feedback transmission failed:', err?.message || err);
+      return {
+        success: false,
+        isRemote: false,
+        error: err?.message || 'Network request failed. Could not reach server.',
       };
     }
   }

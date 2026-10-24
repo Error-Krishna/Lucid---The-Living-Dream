@@ -14,6 +14,8 @@ import {
   MessageSquare,
   Sparkles,
   ArrowRight,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 
 const EXPERIENCE_OPTIONS: { value: FeedbackExperience; label: string; icon: string }[] = [
@@ -36,7 +38,6 @@ export function FeedbackModal() {
   const isFinishExplorationOpen = useUniverseStore((s) => s.isFinishExplorationOpen);
   const setFeedbackOpen = useUniverseStore((s) => s.setFeedbackOpen);
   const closeFinishExploration = useUniverseStore((s) => s.closeFinishExploration);
-  const connectionMode = useUniverseStore((s) => s.connectionMode);
 
   const [experience, setExperience] = useState<FeedbackExperience | null>(null);
   const [primaryInterest, setPrimaryInterest] = useState<FeedbackPrimaryInterest | null>(null);
@@ -48,8 +49,9 @@ export function FeedbackModal() {
     success: boolean;
     isRemote: boolean;
     id?: string;
-    error?: string;
   } | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const isModalVisible = isFeedbackOpen || isFinishExplorationOpen;
 
@@ -59,30 +61,70 @@ export function FeedbackModal() {
     setFeedbackOpen(false);
     closeFinishExploration();
     setSubmissionResult(null);
+    setSubmissionError(null);
+    setValidationError(null);
   };
 
   const isFormValid = experience !== null && primaryInterest !== null && decision !== null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid || isSubmitting) return;
+    setValidationError(null);
+    setSubmissionError(null);
+
+    // Validate required questions
+    const missing: string[] = [];
+    if (!experience) missing.push('Question 1: Overall experience');
+    if (!primaryInterest) missing.push('Question 2: Most interesting aspect');
+    if (!decision) missing.push('Question 3: Continue building recommendation');
+
+    if (missing.length > 0) {
+      setValidationError(`Please answer all required questions: ${missing.join(', ')}`);
+      return;
+    }
+
+    if (isSubmitting) return;
 
     setIsSubmitting(true);
-    const isConnected = connectionMode === 'connected';
 
-    const submission: Omit<FeedbackSubmission, 'id' | 'submittedAt'> = {
-      experienceRating: experience!,
-      primaryInterest: primaryInterest!,
-      decision: decision!,
-      improvements: improvements.trim(),
-      rating: experience === 'Amazing' ? 5 : experience === 'Good' ? 4 : experience === 'Okay' ? 3 : 1,
-      interest: primaryInterest!,
-      prototypeVersion: '1.1.0-space-mvp',
-    };
+    try {
+      const submission: Omit<FeedbackSubmission, 'id' | 'submittedAt'> = {
+        experienceRating: experience!,
+        primaryInterest: primaryInterest!,
+        decision: decision!,
+        improvements: improvements.trim(),
+        rating:
+          experience === 'Amazing'
+            ? 5
+            : experience === 'Good'
+              ? 4
+              : experience === 'Okay'
+                ? 3
+                : 1,
+        interest: primaryInterest!,
+        prototypeVersion: '1.1.0-space-mvp',
+      };
 
-    const res = await persistence.submitFeedback(submission as any, isConnected);
-    setIsSubmitting(false);
-    setSubmissionResult(res);
+      const res = await persistence.submitFeedback(submission as any);
+
+      if (res.success && res.isRemote) {
+        setSubmissionResult({
+          success: true,
+          isRemote: true,
+          id: res.id,
+        });
+      } else {
+        setSubmissionError(
+          res.error || 'Server rejected submission. Please verify your connection and try again.'
+        );
+      }
+    } catch (err: any) {
+      setSubmissionError(
+        err?.message || 'Network error while transmitting feedback. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleExportJson = () => {
@@ -132,16 +174,11 @@ export function FeedbackModal() {
             </h3>
 
             <p className="text-slate-300 text-xs sm:text-sm max-w-md mx-auto mb-6 leading-relaxed">
-              {submissionResult.isRemote ? (
+              Your feedback was securely saved directly to the database.
+              {submissionResult.id && (
                 <>
-                  Your feedback was securely saved directly to the backend database.
-                  Reference ID: <span className="font-mono text-cyan-300">{submissionResult.id}</span>.
-                </>
-              ) : (
-                <>
-                  Your response has been saved locally in your browser. Since the prototype
-                  is in local mode, you can click below to export your feedback JSON to send
-                  directly to the creator.
+                  {' '}
+                  Reference ID: <span className="font-mono text-cyan-300 font-semibold">{submissionResult.id}</span>.
                 </>
               )}
             </p>
@@ -149,17 +186,17 @@ export function FeedbackModal() {
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={handleExportJson}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold tracking-wider uppercase transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-200 text-xs font-semibold tracking-wider uppercase transition-all"
               >
                 <Download className="w-4 h-4" />
-                <span>Export Feedback JSON</span>
+                <span>Export Copy (JSON)</span>
               </button>
 
               <button
                 onClick={handleClose}
-                className="px-6 py-2.5 rounded-full glass-panel hover:bg-slate-800 text-slate-200 text-xs font-medium"
+                className="px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold tracking-wide transition-all shadow-lg shadow-indigo-600/30"
               >
-                Return to Universe
+                Return to Exploration
               </button>
             </div>
           </div>
@@ -181,6 +218,25 @@ export function FeedbackModal() {
               </p>
             </div>
 
+            {/* Validation Banner */}
+            {validationError && (
+              <div className="p-3.5 rounded-2xl bg-amber-950/70 border border-amber-500/50 text-amber-200 text-xs flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>{validationError}</span>
+              </div>
+            )}
+
+            {/* Server Error Banner */}
+            {submissionError && (
+              <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-semibold text-rose-300 mb-0.5">Submission Failed</div>
+                  <div>{submissionError}</div>
+                </div>
+              </div>
+            )}
+
             {/* Required Question 1 */}
             <div>
               <label className="block text-xs font-semibold text-slate-200 mb-2">
@@ -191,7 +247,10 @@ export function FeedbackModal() {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setExperience(opt.value)}
+                    onClick={() => {
+                      setExperience(opt.value);
+                      setValidationError(null);
+                    }}
                     className={`py-3 px-3 rounded-2xl text-xs font-medium transition-all border flex flex-col items-center justify-center gap-1 ${
                       experience === opt.value
                         ? 'bg-indigo-600/50 border-indigo-400 text-white shadow-md shadow-indigo-500/20 ring-1 ring-indigo-400'
@@ -215,7 +274,10 @@ export function FeedbackModal() {
                   <button
                     key={opt}
                     type="button"
-                    onClick={() => setPrimaryInterest(opt)}
+                    onClick={() => {
+                      setPrimaryInterest(opt);
+                      setValidationError(null);
+                    }}
                     className={`w-full text-left p-2.5 rounded-xl text-xs transition-all border flex items-center justify-between ${
                       primaryInterest === opt
                         ? 'bg-indigo-950/70 border-indigo-400 text-white ring-1 ring-indigo-400'
@@ -240,7 +302,10 @@ export function FeedbackModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setDecision('YES')}
+                  onClick={() => {
+                    setDecision('YES');
+                    setValidationError(null);
+                  }}
                   className={`py-3.5 px-4 rounded-xl font-display text-xs uppercase tracking-wider font-bold transition-all border ${
                     decision === 'YES'
                       ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
@@ -252,7 +317,10 @@ export function FeedbackModal() {
 
                 <button
                   type="button"
-                  onClick={() => setDecision('NO')}
+                  onClick={() => {
+                    setDecision('NO');
+                    setValidationError(null);
+                  }}
                   className={`py-3.5 px-4 rounded-xl font-display text-xs uppercase tracking-wider font-bold transition-all border ${
                     decision === 'NO'
                       ? 'bg-rose-600 border-rose-400 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400'
@@ -272,6 +340,7 @@ export function FeedbackModal() {
               <textarea
                 value={improvements}
                 onChange={(e) => setImprovements(e.target.value)}
+                maxLength={2000}
                 rows={2}
                 placeholder="Controls, rocket travel, planet variety, building tools, atmosphere..."
                 className="w-full rounded-xl bg-slate-900/60 border border-slate-700/60 p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
@@ -292,14 +361,26 @@ export function FeedbackModal() {
 
               <button
                 type="submit"
-                disabled={!isFormValid || isSubmitting}
-                className={`px-8 py-3 rounded-full font-semibold text-xs tracking-widest uppercase transition-all shadow-lg ${
-                  isFormValid && !isSubmitting
-                    ? 'bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white hover:scale-105 active:scale-95 shadow-indigo-500/30'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+                disabled={isSubmitting}
+                className={`px-8 py-3 rounded-full font-semibold text-xs tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 ${
+                  isSubmitting
+                    ? 'bg-indigo-900/60 text-indigo-300 border border-indigo-500/40 cursor-wait'
+                    : isFormValid
+                      ? 'bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white hover:scale-105 active:scale-95 shadow-indigo-500/30 cursor-pointer'
+                      : 'bg-indigo-700/60 hover:bg-indigo-600 text-white shadow-md cursor-pointer'
                 }`}
               >
-                {isSubmitting ? 'Transmitting...' : 'Submit Feedback'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-cyan-300" />
+                    <span>Transmitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit Feedback</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </form>
