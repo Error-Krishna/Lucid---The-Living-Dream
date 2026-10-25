@@ -1,19 +1,15 @@
 import React from 'react';
 import { useUniverseStore } from '../../stores/useUniverseStore.js';
-import { PLANET_CATALOG, PlanetId, PlanetMetadata } from '@lucid/shared';
+import { PlanetMetadata } from '@lucid/shared';
+import { TacticalPlanetRadar } from './TacticalPlanetRadar.js';
 import {
   Compass,
   Crosshair,
   Navigation,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUp,
-  ArrowDown,
   RotateCcw,
   Shield,
   Zap,
   Info,
-  X,
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
@@ -62,7 +58,13 @@ export function FlightGuidanceHUD({
   const toggleApproachAssistance = useUniverseStore((s) => s.toggleApproachAssistance);
   const landingAssistance = useUniverseStore((s) => s.landingAssistance);
   const toggleLandingAssistance = useUniverseStore((s) => s.toggleLandingAssistance);
-  const radarAltitude = useUniverseStore((s) => s.radarAltitude);
+
+  // Authoritative Autopilot & Assistance Level State
+  const autopilot = useUniverseStore((s) => s.autopilot);
+  const disengageAutopilot = useUniverseStore((s) => s.disengageAutopilot);
+  const autopilotPhase = useUniverseStore((s) => s.autopilotPhase);
+  const flightAssistanceLevel = useUniverseStore((s) => s.flightAssistanceLevel);
+  const setFlightAssistanceLevel = useUniverseStore((s) => s.setFlightAssistanceLevel);
 
   const {
     headingDeg,
@@ -118,7 +120,6 @@ export function FlightGuidanceHUD({
               transform: `translateX(-${(headingDeg / 360) * 1080 + 360}px)`,
             }}
           >
-            {/* 3 repeating loops of 0-360 for seamless infinite scrolling */}
             {[0, 1, 2].map((loop) => (
               <React.Fragment key={loop}>
                 {[
@@ -153,10 +154,7 @@ export function FlightGuidanceHUD({
             <div
               className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center z-10 transition-all duration-75"
               style={{
-                left: `${Math.max(
-                  8,
-                  Math.min(92, 50 + (headingErrorDeg / 180) * 45)
-                )}%`,
+                left: `${Math.max(8, Math.min(92, 50 + (headingErrorDeg / 180) * 45))}%`,
               }}
             >
               <div
@@ -176,7 +174,7 @@ export function FlightGuidanceHUD({
           )}
         </div>
 
-        {/* Current Heading & Cardinal Readout */}
+        {/* Current Heading & Attitude Readout */}
         <div className="flex items-center gap-3 mt-1 text-[11px] font-bold text-cyan-300 tracking-wider">
           <span>HDG {Math.round(headingDeg).toString().padStart(3, '0')}° {cardinal}</span>
           <span>•</span>
@@ -187,63 +185,7 @@ export function FlightGuidanceHUD({
       </div>
 
       {/* ============================================================== */}
-      {/* 2. ARTIFICIAL HORIZON / ATTITUDE INDICATOR (Lower-Left MFD)    */}
-      {/* ============================================================== */}
-      <div className="absolute bottom-20 left-6 hidden lg:flex flex-col items-center pointer-events-auto">
-        <div className="glass-panel p-3 rounded-2xl border border-cyan-500/40 bg-slate-950/90 shadow-2xl w-48 h-48 flex flex-col items-center justify-between relative overflow-hidden">
-          {/* Header */}
-          <div className="w-full flex items-center justify-between text-[9px] text-slate-400 font-bold border-b border-slate-800 pb-1">
-            <span className="text-cyan-400">ATTITUDE // HORIZON</span>
-            <span>{isAligned ? 'ALIGNED' : 'DRIFT'}</span>
-          </div>
-
-          {/* Attitude Ball / Pitch Ladder */}
-          <div className="relative w-32 h-32 rounded-full border border-slate-700 bg-slate-900/90 overflow-hidden flex items-center justify-center">
-            {/* Tilting Horizon & Ladder Group */}
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center transition-transform duration-75"
-              style={{
-                transform: `rotate(${rollDeg}deg) translateY(${pitchDeg * 1.5}px)`,
-              }}
-            >
-              {/* Sky Half */}
-              <div className="w-full h-1/2 bg-cyan-950/40 border-b border-cyan-400" />
-              {/* Ground Half */}
-              <div className="w-full h-1/2 bg-amber-950/30" />
-
-              {/* Pitch Ladder Lines */}
-              {[-30, -20, -10, 10, 20, 30].map((step) => (
-                <div
-                  key={step}
-                  className="absolute w-12 flex items-center justify-between text-[8px] text-cyan-300/70"
-                  style={{ top: `calc(50% - ${step * 1.5}px)` }}
-                >
-                  <span className="w-2.5 h-[1px] bg-cyan-400" />
-                  <span>{Math.abs(step)}</span>
-                  <span className="w-2.5 h-[1px] bg-cyan-400" />
-                </div>
-              ))}
-            </div>
-
-            {/* Fixed Aircraft Center Reticle Symbol */}
-            <div className="relative z-10 flex items-center gap-1">
-              <div className="w-4 h-[2px] bg-amber-400" />
-              <div className="w-2 h-2 rounded-full border border-amber-400" />
-              <div className="w-4 h-[2px] bg-amber-400" />
-            </div>
-          </div>
-
-          {/* Telemetry Footer */}
-          <div className="w-full flex items-center justify-between text-[10px] text-slate-300 font-bold pt-1 border-t border-slate-800">
-            <span>P: {Math.round(pitchDeg)}°</span>
-            <span className="text-cyan-400">R: {Math.round(rollDeg)}°</span>
-            <span>Y: {Math.round(headingDeg)}°</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* 3. OPTICAL NOSE BORE-SIGHT CROSSHAIR [ + ]                     */}
+      {/* 2. OPTICAL NOSE BORE-SIGHT CROSSHAIR [ + ]                     */}
       {/* ============================================================== */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center opacity-75">
         <div className="relative w-7 h-7 flex items-center justify-center">
@@ -257,7 +199,7 @@ export function FlightGuidanceHUD({
       </div>
 
       {/* ============================================================== */}
-      {/* 4. FLIGHT PATH MARKER / VELOCITY VECTOR (-◯-)                  */}
+      {/* 3. FLIGHT PATH MARKER / VELOCITY VECTOR (-◯-)                  */}
       {/* ============================================================== */}
       {speed > 1 && progradeScreenPos.onScreen && (
         <div
@@ -267,7 +209,6 @@ export function FlightGuidanceHUD({
             top: `${Math.max(12, Math.min(88, progradeScreenPos.y))}%`,
           }}
         >
-          {/* Flight Path Circle with Wings and Top Fin */}
           <div className="relative flex items-center">
             <div className="w-3.5 h-[2px] bg-emerald-400" />
             <div className="w-4 h-4 rounded-full border-2 border-emerald-400 flex items-center justify-center">
@@ -277,13 +218,13 @@ export function FlightGuidanceHUD({
             <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-[2px] h-2 bg-emerald-400" />
           </div>
           <span className="text-[8px] text-emerald-300 font-bold bg-black/60 px-1 py-0.2 rounded mt-0.5">
-            VECTOR: {speed} KM/S
+            VECTOR: {Math.round(speed)} KM/S
           </span>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* 5. SCREEN-SPACE TARGET RETICLE & OFF-SCREEN POINTER            */}
+      {/* 4. SCREEN-SPACE TARGET RETICLE & OFF-SCREEN POINTER            */}
       {/* ============================================================== */}
       {targetMeta && (
         <>
@@ -296,7 +237,6 @@ export function FlightGuidanceHUD({
                 top: `${targetScreenPos.y}%`,
               }}
             >
-              {/* Target Locking Box */}
               <div
                 className={`relative w-28 h-28 border-2 rounded-xl flex items-center justify-center ${
                   isAligned
@@ -304,33 +244,25 @@ export function FlightGuidanceHUD({
                     : 'border-dashed border-cyan-400'
                 }`}
                 style={{
-                  borderColor: isAligned
-                    ? '#10b981'
-                    : targetMeta.visualTheme.accentColor,
+                  borderColor: isAligned ? '#10b981' : targetMeta.visualTheme.accentColor,
                 }}
               >
                 <Crosshair
                   className="w-7 h-7"
                   style={{
-                    color: isAligned
-                      ? '#10b981'
-                      : targetMeta.visualTheme.accentColor,
+                    color: isAligned ? '#10b981' : targetMeta.visualTheme.accentColor,
                   }}
                 />
 
-                {/* Target Name Badge */}
                 <span
                   className="absolute -top-6 text-[9px] font-bold tracking-wider uppercase px-2 py-0.5 rounded border border-white/10 bg-slate-950/85 whitespace-nowrap"
                   style={{
-                    color: isAligned
-                      ? '#10b981'
-                      : targetMeta.visualTheme.accentColor,
+                    color: isAligned ? '#10b981' : targetMeta.visualTheme.accentColor,
                   }}
                 >
                   {isAligned ? '● VECTOR ALIGNED' : targetMeta.name.toUpperCase()}
                 </span>
 
-                {/* Distance & Error */}
                 <span className="absolute -bottom-6 text-[10px] font-bold text-cyan-300 px-2 py-0.5 rounded border border-white/10 bg-slate-950/85 whitespace-nowrap flex items-center gap-1.5">
                   <span>{Math.round(distanceToTarget)} KM</span>
                   <span>•</span>
@@ -339,41 +271,36 @@ export function FlightGuidanceHUD({
               </div>
             </div>
           ) : (
-            /* Target Planet is off-screen or behind the craft — positioned safely away from crosshair */
-            <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none z-20">
-              {/* Guidance Correction Badge */}
-              <div className="glass-panel p-3.5 rounded-2xl border border-amber-400/80 bg-slate-950/95 shadow-2xl max-w-sm text-center animate-pulse pointer-events-auto">
-                <div className="flex items-center justify-center gap-2 mb-1.5 text-amber-300 text-xs font-bold uppercase">
+            /* Target Planet is off-screen or behind the craft */
+            <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 pointer-events-none z-20">
+              <div className="glass-panel p-3 rounded-2xl border border-amber-400/80 bg-slate-950/95 shadow-2xl max-w-sm text-center animate-pulse pointer-events-auto">
+                <div className="flex items-center justify-center gap-2 mb-1 text-amber-300 text-xs font-bold uppercase">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                   <span>
-                    {targetSector === 'behind'
-                      ? 'TARGET IS BEHIND YOU'
-                      : 'TARGET OFF-SCREEN'}
+                    {targetSector === 'behind' ? 'TARGET IS BEHIND YOU' : 'TARGET OFF-SCREEN'}
                   </span>
                 </div>
 
-                <div className="text-white text-sm font-bold mb-2">
+                <div className="text-white text-xs font-bold mb-1.5">
                   {targetMeta.name.toUpperCase()} • {Math.round(distanceToTarget)} KM
                 </div>
 
-                {/* Steering Correction Commands */}
-                <div className="grid grid-cols-2 gap-2 text-xs font-bold py-2 border-y border-slate-800 text-cyan-300">
-                  <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                    <div className="text-[9px] text-slate-400">YAW STEER</div>
-                    <div className="text-white text-xs mt-0.5">{headingSteerText}</div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-bold py-1.5 border-y border-slate-800 text-cyan-300">
+                  <div className="bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
+                    <div className="text-[8px] text-slate-400">YAW STEER</div>
+                    <div className="text-white text-[11px] mt-0.5">{headingSteerText}</div>
                   </div>
-                  <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                    <div className="text-[9px] text-slate-400">PITCH STEER</div>
-                    <div className="text-white text-xs mt-0.5">{pitchSteerText}</div>
+                  <div className="bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
+                    <div className="text-[8px] text-slate-400">PITCH STEER</div>
+                    <div className="text-white text-[11px] mt-0.5">{pitchSteerText}</div>
                   </div>
                 </div>
 
-                {/* Action button */}
                 <button
                   onClick={onQuickTurnaround}
-                  className="mt-3 w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-cyan-500 hover:from-amber-400 hover:to-cyan-400 text-slate-950 font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg"
+                  className="mt-2 w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-cyan-500 hover:from-amber-400 hover:to-cyan-400 text-slate-950 font-bold text-[11px] tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-3.5 h-3.5" />
                   <span>Align Directly to Target [R]</span>
                 </button>
               </div>
@@ -383,22 +310,20 @@ export function FlightGuidanceHUD({
       )}
 
       {/* ============================================================== */}
-      {/* 6. PRIMARY FLIGHT TELEMETRY (Right Side MFD)                   */}
+      {/* 5. PRIMARY FLIGHT TELEMETRY (Right Side MFD)                   */}
       {/* ============================================================== */}
-      <div className="absolute top-28 right-6 hidden md:flex flex-col gap-2.5 w-64 pointer-events-auto">
-        {/* Flight Velocities & Drift Box */}
-        <div className="glass-panel p-3.5 rounded-2xl border border-cyan-500/40 bg-slate-950/90 shadow-xl">
+      <div className="absolute top-28 right-6 hidden md:flex flex-col gap-2.5 w-60 pointer-events-auto">
+        {/* Velocities & Drift Box */}
+        <div className="glass-panel p-3 rounded-2xl border border-cyan-500/40 bg-slate-950/90 shadow-xl">
           <div className="flex items-center justify-between text-[10px] text-cyan-400 font-bold border-b border-slate-800 pb-1 mb-2">
-            <span>FLIGHT VELOCITY // DRIFT</span>
+            <span>FLIGHT VELOCITY</span>
             <span className="text-white">{Math.round(speed)} KM/S</span>
           </div>
 
           <div className="space-y-1.5 text-xs text-slate-300">
             <div className="flex justify-between">
               <span className="text-slate-400">Forward Speed:</span>
-              <span className="font-bold text-white">
-                {Math.round(forwardSpeed)} km/s
-              </span>
+              <span className="font-bold text-white">{Math.round(forwardSpeed)} km/s</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Lateral Drift:</span>
@@ -412,27 +337,21 @@ export function FlightGuidanceHUD({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Vertical Climb:</span>
-              <span className="font-bold text-white">
-                {Math.round(verticalSpeed)} km/s
-              </span>
+              <span className="font-bold text-white">{Math.round(verticalSpeed)} km/s</span>
             </div>
             <div className="flex justify-between pt-1 border-t border-slate-800/80">
               <span className="text-slate-400">Throttle:</span>
-              <span className="font-bold text-cyan-300">
-                {Math.round(throttle * 100)}%
-              </span>
+              <span className="font-bold text-cyan-300">{Math.round(throttle * 100)}%</span>
             </div>
           </div>
         </div>
 
         {/* Target Approach Guidance Box */}
         {targetMeta && (
-          <div className="glass-panel p-3.5 rounded-2xl border border-indigo-500/40 bg-slate-950/90 shadow-xl">
+          <div className="glass-panel p-3 rounded-2xl border border-indigo-500/40 bg-slate-950/90 shadow-xl">
             <div className="flex items-center justify-between text-[10px] text-indigo-400 font-bold border-b border-slate-800 pb-1 mb-2">
-              <span>TARGET APPROACH GUIDANCE</span>
-              <span
-                className={isAligned ? 'text-emerald-400' : 'text-amber-400'}
-              >
+              <span>TARGET APPROACH</span>
+              <span className={isAligned ? 'text-emerald-400' : 'text-amber-400'}>
                 {isAligned ? '● ALIGNED' : 'ALIGNING'}
               </span>
             </div>
@@ -440,15 +359,13 @@ export function FlightGuidanceHUD({
             <div className="space-y-1.5 text-xs text-slate-300">
               <div className="flex justify-between">
                 <span className="text-slate-400">Destination:</span>
-                <span className="font-bold text-white truncate max-w-[130px]">
+                <span className="font-bold text-white truncate max-w-[120px]">
                   {targetMeta.name.split('—')[0]}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Distance:</span>
-                <span className="font-bold text-cyan-300">
-                  {Math.round(distanceToTarget)} km
-                </span>
+                <span className="font-bold text-cyan-300">{Math.round(distanceToTarget)} km</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Closing Speed:</span>
@@ -458,8 +375,8 @@ export function FlightGuidanceHUD({
                   }`}
                 >
                   {isApproaching
-                    ? `+${Math.round(closingSpeed)} km/s (Closing)`
-                    : `${Math.round(closingSpeed)} km/s (Opening)`}
+                    ? `+${Math.round(closingSpeed)} km/s`
+                    : `${Math.round(closingSpeed)} km/s`}
                 </span>
               </div>
               {etaSeconds && (
@@ -471,11 +388,11 @@ export function FlightGuidanceHUD({
             </div>
 
             {/* Steering Correction Guidance Strip */}
-            <div className="mt-2.5 p-2 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-center">
+            <div className="mt-2 p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-bold text-center">
               {isAligned ? (
                 <span className="text-emerald-400 flex items-center justify-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  VECTOR LOCKED — HOLD COURSE
+                  COURSE LOCKED
                 </span>
               ) : (
                 <div className="flex flex-col gap-0.5 text-cyan-300">
@@ -486,65 +403,174 @@ export function FlightGuidanceHUD({
             </div>
           </div>
         )}
+      </div>
 
-        {/* Assistance Modes Control Panel */}
-        <div className="glass-panel p-2.5 rounded-2xl border border-slate-800 bg-slate-950/85 flex flex-col gap-1.5">
-          <div className="text-[9px] text-slate-400 font-bold px-1">
-            FLIGHT ASSISTANCE SYSTEMS
+      {/* ============================================================== */}
+      {/* 6. LOWER INSTRUMENTATION DECK (Non-overlapping Flex Layout)    */}
+      {/* ============================================================== */}
+      <div className="absolute bottom-4 sm:bottom-5 left-3 sm:left-6 right-3 sm:right-6 flex items-end justify-between pointer-events-none z-20">
+        {/* LOWER LEFT: Dedicated Tactical Radar & Gyrometer Cluster */}
+        <div className="flex items-end gap-3 pointer-events-auto">
+          {/* A. Tactical Planet Radar (Always visible, dedicated container) */}
+          <TacticalPlanetRadar size={140} />
+
+          {/* B. Gyrometer / Attitude Indicator (Placed side-by-side, NEVER overlaps radar) */}
+          <div className="hidden sm:flex glass-panel p-2.5 rounded-2xl border border-cyan-500/40 bg-slate-950/90 shadow-2xl w-40 h-44 flex-col items-center justify-between relative overflow-hidden">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between text-[8px] text-slate-400 font-bold border-b border-slate-800 pb-1">
+              <span className="text-cyan-400">ATTITUDE // GYRO</span>
+              <span>{isAligned ? 'ALIGNED' : 'DRIFT'}</span>
+            </div>
+
+            {/* Attitude Ball / Pitch Ladder */}
+            <div className="relative w-28 h-28 rounded-full border border-slate-700 bg-slate-900/90 overflow-hidden flex items-center justify-center">
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center transition-transform duration-75"
+                style={{
+                  transform: `rotate(${rollDeg}deg) translateY(${pitchDeg * 1.3}px)`,
+                }}
+              >
+                <div className="w-full h-1/2 bg-cyan-950/40 border-b border-cyan-400" />
+                <div className="w-full h-1/2 bg-amber-950/30" />
+
+                {[-30, -20, -10, 10, 20, 30].map((step) => (
+                  <div
+                    key={step}
+                    className="absolute w-10 flex items-center justify-between text-[7px] text-cyan-300/70"
+                    style={{ top: `calc(50% - ${step * 1.3}px)` }}
+                  >
+                    <span className="w-2 h-[1px] bg-cyan-400" />
+                    <span>{Math.abs(step)}</span>
+                    <span className="w-2 h-[1px] bg-cyan-400" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Fixed Aircraft Reticle Symbol */}
+              <div className="relative z-10 flex items-center gap-1">
+                <div className="w-3.5 h-[2px] bg-amber-400" />
+                <div className="w-2 h-2 rounded-full border border-amber-400" />
+                <div className="w-3.5 h-[2px] bg-amber-400" />
+              </div>
+            </div>
+
+            {/* Telemetry Footer */}
+            <div className="w-full flex items-center justify-between text-[9px] text-slate-300 font-bold pt-1 border-t border-slate-800">
+              <span>P: {Math.round(pitchDeg)}°</span>
+              <span className="text-cyan-400">R: {Math.round(rollDeg)}°</span>
+              <span>Y: {Math.round(headingDeg)}°</span>
+            </div>
           </div>
+        </div>
 
+        {/* LOWER CENTER: Autopilot Active Status & Assistance Level Pill */}
+        <div className="flex flex-col items-center gap-2 pointer-events-auto">
+          {/* Autopilot Status Banner */}
+          {autopilot && (
+            <div className="glass-panel px-4 py-2 rounded-2xl border border-cyan-400/90 bg-slate-950/95 shadow-2xl flex items-center gap-3 animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+              <div className="flex flex-col">
+                <span className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider">
+                  AUTOPILOT ACTIVE // {autopilotPhase.toUpperCase()}
+                </span>
+                <span className="text-[9px] text-slate-300">
+                  {targetMeta ? `Navigating to ${targetMeta.name.split('—')[0]} (${Math.round(distanceToTarget)} km)` : 'Cruising'}
+                </span>
+              </div>
+              <button
+                onClick={() => disengageAutopilot('Manual control restored.')}
+                className="px-2.5 py-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-[10px] font-bold tracking-wider uppercase transition-colors ml-2 shadow-md"
+                title="Regain full manual control [Space]"
+              >
+                Take Control [Space]
+              </button>
+            </div>
+          )}
+
+          {/* Three Flight Assistance Levels Selector */}
+          <div className="glass-panel p-1 rounded-2xl border border-slate-800 bg-slate-950/85 flex items-center gap-1 text-[10px] font-bold shadow-lg">
+            <button
+              onClick={() => setFlightAssistanceLevel('manual')}
+              className={`px-3 py-1.5 rounded-xl transition-all ${
+                flightAssistanceLevel === 'manual'
+                  ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Full manual spacecraft control"
+            >
+              MANUAL
+            </button>
+            <button
+              onClick={() => setFlightAssistanceLevel('assisted')}
+              className={`px-3 py-1.5 rounded-xl transition-all ${
+                flightAssistanceLevel === 'assisted'
+                  ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-400/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Assisted flight: Target alignment & drift damping"
+            >
+              ASSISTED
+            </button>
+            <button
+              onClick={() => setFlightAssistanceLevel('autopilot')}
+              className={`px-3 py-1.5 rounded-xl transition-all ${
+                flightAssistanceLevel === 'autopilot'
+                  ? 'bg-indigo-600/35 text-indigo-200 border border-indigo-400/70 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Autopilot: Autonomous flight toward selected destination"
+            >
+              AUTOPILOT
+            </button>
+          </div>
+        </div>
+
+        {/* LOWER RIGHT: Assistance Modes Toggle Dock */}
+        <div className="hidden lg:flex glass-panel p-2 rounded-2xl border border-slate-800 bg-slate-950/85 flex-col gap-1.5 w-56 pointer-events-auto">
+          <div className="text-[8px] text-slate-400 font-bold px-1">
+            FLIGHT ASSIST MODES
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {/* Heading Assist Toggle */}
             <button
               onClick={() => toggleHeadingAssistance()}
-              className={`px-2 py-1.5 rounded-xl border text-[10px] font-bold transition-all text-left flex items-center justify-between ${
+              className={`px-2 py-1 rounded-xl border text-[9px] font-bold transition-all text-left flex items-center justify-between ${
                 headingAssistance
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm'
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
                   : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white'
               }`}
-              title="Assists pitch and yaw towards target [Z]"
             >
               <span>HEADING [Z]</span>
               <span>{headingAssistance ? 'ON' : 'OFF'}</span>
             </button>
-
-            {/* Approach Assist Toggle */}
             <button
               onClick={() => toggleApproachAssistance()}
-              className={`px-2 py-1.5 rounded-xl border text-[10px] font-bold transition-all text-left flex items-center justify-between ${
+              className={`px-2 py-1 rounded-xl border text-[9px] font-bold transition-all text-left flex items-center justify-between ${
                 approachAssistance
-                  ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200 shadow-sm'
+                  ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200'
                   : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white'
               }`}
-              title="Guided approach speed corridor [C]"
             >
               <span>APPROACH [C]</span>
               <span>{approachAssistance ? 'ON' : 'OFF'}</span>
             </button>
-
-            {/* Landing Assist Toggle */}
             <button
               onClick={() => toggleLandingAssistance()}
-              className={`px-2 py-1.5 rounded-xl border text-[10px] font-bold transition-all text-left flex items-center justify-between ${
+              className={`px-2 py-1 rounded-xl border text-[9px] font-bold transition-all text-left flex items-center justify-between ${
                 landingAssistance
-                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 shadow-sm'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
                   : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white'
               }`}
-              title="Auto-levels pitch and roll for landing [X]"
             >
               <span>LEVEL [X]</span>
               <span>{landingAssistance ? 'ON' : 'OFF'}</span>
             </button>
-
-            {/* Landing Gear Toggle */}
             <button
               onClick={() => toggleGear()}
-              className={`px-2 py-1.5 rounded-xl border text-[10px] font-bold transition-all text-left flex items-center justify-between ${
+              className={`px-2 py-1 rounded-xl border text-[9px] font-bold transition-all text-left flex items-center justify-between ${
                 gearDeployed
                   ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300'
                   : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white'
               }`}
-              title="Toggle Landing Gear [G]"
             >
               <span>GEAR [G]</span>
               <span>{gearDeployed ? 'DOWN' : 'UP'}</span>

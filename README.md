@@ -52,13 +52,17 @@ The prototype currently implements the following functional systems:
 - **Interactive 10-Step Flight Tutorial**:
   - In-cockpit guided training sequence covering mouse-look orientation, throttle acceleration, coasting, deceleration, manual steering, targeting, scanner pulses, approach alignment, landing gear deployment, and atmospheric touchdown.
   - Dual progression: automatic detection of player actions plus manual progression buttons on every step so players never get stuck.
-- **Flight Guidance HUD & Attitude Instruments**:
-  - Infinite-scrolling 360° compass ribbon tape with cardinal headers and target bearing marker.
-  - Artificial horizon Attitude Direction Indicator (ADI) with pitch ladder and banking roll.
-  - Fixed optical nose boresight reticle and dynamic velocity vector (Flight Path Marker) displaying lateral drift and climb/sink.
-  - Off-screen and rear steering correction prompts located outside the pilot's forward field of view.
-  - Assistance modes: Heading Assist (`Z`), Approach Assist (`C`), and Landing Level Assist (`X`).
-  - Tactile landing gear system (`G`) with visual deployment indicators.
+- **Three Flight Assistance Levels & Autonomous Navigation**:
+  - **Mode A (Manual Flight)**: Complete pilot authority with raw physical thrust, manual 360° steering, roll trim, and momentum coasting.
+  - **Mode B (Assisted Flight)**: Soft orientation alignment, lateral drift damping, approach speed corridors, and landing level assistance.
+  - **Mode C (Autopilot)**: Full physical autonomous navigation toward any selected world with bounded acceleration, automatic cruising speed (~88 km/s), smooth corridor deceleration, and surface hold. Instant manual override upon any pilot control input (`W/S/A/D/mouse/Space`).
+- **Tactical Planet Radar & Non-Overlapping Cockpit Layout**:
+  - Dedicated 2D tactical circular radar scope with range scaling (`600K`, `1800K`, `3000K`), sweep scanner, relative bearing, target locks, and distance readouts.
+  - Non-overlapping lower instrument deck: radar and gyrometer/attitude indicator are structured in dedicated sibling containers, guaranteeing unobstructed visibility across all viewports.
+- **Guided Exploration Tour Mode**:
+  - Hands-free sector-to-sector tour with intelligent next-destination recommendations, pause-on-foot state preservation, and user-confirmed progression.
+- **Navigation Recovery System**:
+  - Automated detection when drifting far into deep void or traveling away from destinations, offering 1-click nearest planet locking and autopilot recovery.
 - **Navigation Atlas (`M`)**:
   - Starmap modal displaying all 10 worlds with coordinates, atmospheric data, gravity, and narrative lore.
 - **Planetary Approach, Landing & On-Foot Exploration**:

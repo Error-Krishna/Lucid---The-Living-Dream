@@ -21,6 +21,8 @@ export function ControlsHelpModal() {
   const restartTutorial = useUniverseStore((s) => s.restartTutorial);
   const flightSensitivity = useUniverseStore((s) => s.flightSensitivity);
   const setFlightSensitivity = useUniverseStore((s) => s.setFlightSensitivity);
+  const flightAssistanceLevel = useUniverseStore((s) => s.flightAssistanceLevel);
+  const setFlightAssistanceLevel = useUniverseStore((s) => s.setFlightAssistanceLevel);
 
   if (!isHelpOpen) return null;
 
@@ -89,6 +91,54 @@ export function ControlsHelpModal() {
               </div>
             </div>
           </button>
+        </div>
+
+        {/* Three Flight Assistance Levels */}
+        <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider">
+              <Rocket className="w-4 h-4 text-indigo-400" />
+              <span>Flight Assistance Level</span>
+            </div>
+            <span className="text-[10px] font-mono text-indigo-400 uppercase">
+              Current: {flightAssistanceLevel}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                {
+                  id: 'manual',
+                  label: 'Mode A: Manual',
+                  desc: 'Full pilot authority. No automatic guidance.',
+                },
+                {
+                  id: 'assisted',
+                  label: 'Mode B: Assisted',
+                  desc: 'Recommended: Target vector assist & lateral drift damping.',
+                },
+                {
+                  id: 'autopilot',
+                  label: 'Mode C: Autopilot',
+                  desc: 'Autonomous navigation. Immediate manual override on input.',
+                },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setFlightAssistanceLevel(item.id)}
+                className={`p-2 rounded-xl border text-left transition-all ${
+                  flightAssistanceLevel === item.id
+                    ? 'bg-indigo-500/20 border-indigo-400 text-white shadow-sm'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="text-xs font-bold font-mono">{item.label}</div>
+                <div className="text-[9px] text-slate-400 mt-0.5 leading-tight">{item.desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Flight Sensitivity Settings Selector */}

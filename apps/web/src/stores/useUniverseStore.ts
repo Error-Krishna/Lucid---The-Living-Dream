@@ -86,6 +86,76 @@ interface UniverseState {
   radarAltitude: number;
   landingFeedback: string | null;
 
+  // Autopilot & Flight Guidance
+  autopilot: boolean;
+  autopilotPhase: 'idle' | 'aligning' | 'cruising' | 'approaching' | 'arrival-hold' | 'landing';
+  flightAssistanceLevel: 'manual' | 'assisted' | 'autopilot';
+  setAutopilot: (active: boolean) => void;
+  toggleAutopilot: () => boolean;
+  setAutopilotPhase: (
+    phase: 'idle' | 'aligning' | 'cruising' | 'approaching' | 'arrival-hold' | 'landing'
+  ) => void;
+  setFlightAssistanceLevel: (level: 'manual' | 'assisted' | 'autopilot') => void;
+  engageAutopilot: (targetPlanetId?: PlanetId) => boolean;
+  disengageAutopilot: (reason?: string) => void;
+
+  // Guided Exploration Tour
+  guidedExplorationState:
+    | 'idle'
+    | 'selecting-destination'
+    | 'navigating'
+    | 'approaching'
+    | 'awaiting-exploration'
+    | 'suggesting-next-destination'
+    | 'paused'
+    | 'manual-override'
+    | 'completed'
+    | 'error';
+  guidedExplorationDestination: PlanetId | null;
+  guidedExplorationAutoSuggest: boolean;
+  guidedExplorationStopForExploration: boolean;
+  startGuidedExploration: (startingPlanetId?: PlanetId) => void;
+  stopGuidedExploration: () => void;
+  pauseGuidedExploration: () => void;
+  resumeGuidedExploration: () => void;
+  suggestNextGuidedPlanet: () => PlanetId | null;
+  setGuidedExplorationState: (
+    state:
+      | 'idle'
+      | 'selecting-destination'
+      | 'navigating'
+      | 'approaching'
+      | 'awaiting-exploration'
+      | 'suggesting-next-destination'
+      | 'paused'
+      | 'manual-override'
+      | 'completed'
+      | 'error'
+  ) => void;
+
+  // Navigation Feedback & Recovery
+  navigationToast: {
+    id: string;
+    message: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null;
+  showNavigationToast: (
+    message: string,
+    opts?: {
+      type?: 'info' | 'success' | 'warning' | 'error';
+      actionLabel?: string;
+      onAction?: () => void;
+    }
+  ) => void;
+  clearNavigationToast: () => void;
+  isRecoveryModalOpen: boolean;
+  setRecoveryModalOpen: (open: boolean) => void;
+  findNearestPlanet: () => PlanetId;
+  isAutopilotHintDismissed: boolean;
+  dismissAutopilotHint: () => void;
+
   // Physical Spacecraft Actions
   setSpacecraftPhysics: (
     pos: [number, number, number],
@@ -391,6 +461,228 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
       return next;
     },
 
+    // Autopilot & Assistance Level Implementations
+    autopilot: false,
+    autopilotPhase: 'idle',
+    flightAssistanceLevel: 'manual',
+
+    setAutopilot: (active: boolean) => {
+      if (active) {
+        get().engageAutopilot();
+      } else {
+        get().disengageAutopilot();
+      }
+    },
+
+    toggleAutopilot: () => {
+      const active = !get().autopilot;
+      if (active) {
+        return get().engageAutopilot();
+      } else {
+        get().disengageAutopilot();
+        return false;
+      }
+    },
+
+    setAutopilotPhase: (phase) => set({ autopilotPhase: phase }),
+
+    setFlightAssistanceLevel: (level) => {
+      if (level === 'manual') {
+        get().disengageAutopilot();
+        set({
+          flightAssistanceLevel: 'manual',
+          headingAssistance: false,
+          approachAssistance: false,
+        });
+        get().showNavigationToast('Flight mode: Manual Flight');
+      } else if (level === 'assisted') {
+        get().disengageAutopilot();
+        set({
+          flightAssistanceLevel: 'assisted',
+          headingAssistance: true,
+          approachAssistance: true,
+        });
+        get().showNavigationToast('Flight mode: Assisted Navigation (Route & drift assist active)');
+      } else if (level === 'autopilot') {
+        const success = get().engageAutopilot();
+        if (success) {
+          set({ flightAssistanceLevel: 'autopilot' });
+        }
+      }
+    },
+
+    engageAutopilot: (targetPlanetId) => {
+      const target = targetPlanetId || get().selectedTargetId;
+      if (!target || !PLANET_CATALOG[target]) {
+        get().showNavigationToast('No destination selected. Choose a planet to begin your journey.', {
+          type: 'warning',
+          actionLabel: 'Choose Planet',
+          onAction: () => get().setMapOpen(true),
+        });
+        return false;
+      }
+      if (targetPlanetId) {
+        get().setTargetPlanet(targetPlanetId);
+      }
+      soundEngine.playTargetLocked();
+      set({
+        autopilot: true,
+        autopilotPhase: 'aligning',
+        flightAssistanceLevel: 'autopilot',
+        headingAssistance: true,
+        approachAssistance: true,
+      });
+      get().showNavigationToast(
+        `Autopilot engaged. Heading toward ${PLANET_CATALOG[target].name}.`,
+        {
+          type: 'info',
+          actionLabel: 'Take Manual Control',
+          onAction: () => get().disengageAutopilot('Manual control restored.'),
+        }
+      );
+      return true;
+    },
+
+    disengageAutopilot: (reason) => {
+      if (get().autopilot) {
+        soundEngine.playUIBeep('low');
+      }
+      set({
+        autopilot: false,
+        autopilotPhase: 'idle',
+        flightAssistanceLevel: 'manual',
+      });
+      if (
+        get().guidedExplorationState === 'navigating' ||
+        get().guidedExplorationState === 'approaching'
+      ) {
+        set({ guidedExplorationState: 'manual-override' });
+      }
+      if (reason) {
+        get().showNavigationToast(reason, { type: 'info' });
+      }
+    },
+
+    // Guided Exploration Tour State & Actions
+    guidedExplorationState: 'idle',
+    guidedExplorationDestination: null,
+    guidedExplorationAutoSuggest: true,
+    guidedExplorationStopForExploration: true,
+    setGuidedExplorationState: (state) => set({ guidedExplorationState: state }),
+
+    startGuidedExploration: (startingPlanetId) => {
+      const target =
+        startingPlanetId ||
+        get().selectedTargetId ||
+        get().suggestNextGuidedPlanet() ||
+        'origin';
+      get().setTargetPlanet(target);
+      const success = get().engageAutopilot(target);
+      if (success) {
+        set({
+          guidedExplorationState: 'navigating',
+          guidedExplorationDestination: target,
+        });
+        get().showNavigationToast(
+          `Guided Exploration active: Heading toward ${PLANET_CATALOG[target].name}.`,
+          { type: 'success' }
+        );
+      }
+    },
+
+    stopGuidedExploration: () => {
+      get().disengageAutopilot();
+      set({
+        guidedExplorationState: 'idle',
+        guidedExplorationDestination: null,
+      });
+      get().showNavigationToast('Guided Exploration stopped. You have manual control.');
+    },
+
+    pauseGuidedExploration: () => {
+      get().disengageAutopilot();
+      set({ guidedExplorationState: 'paused' });
+      get().showNavigationToast('Guided Exploration paused. Take your time exploring.');
+    },
+
+    resumeGuidedExploration: () => {
+      const target = get().guidedExplorationDestination || get().suggestNextGuidedPlanet();
+      if (target) {
+        get().startGuidedExploration(target);
+      }
+    },
+
+    suggestNextGuidedPlanet: () => {
+      const pos = get().spacecraftPosition;
+      const visited = get().visitedPlanets;
+      const active = get().activePlanet;
+      const planetIds = Object.keys(PLANET_CATALOG) as PlanetId[];
+
+      // Filter unvisited first
+      const unvisited = planetIds.filter((pid) => !visited[pid] && pid !== active);
+      const pool = unvisited.length > 0 ? unvisited : planetIds.filter((pid) => pid !== active);
+
+      if (pool.length === 0) return null;
+
+      pool.sort((a, b) => {
+        const posA = getPlanetUniversePosition(a);
+        const posB = getPlanetUniversePosition(b);
+        const distA = Math.hypot(posA[0] - pos[0], posA[1] - pos[1], posA[2] - pos[2]);
+        const distB = Math.hypot(posB[0] - pos[0], posB[1] - pos[1], posB[2] - pos[2]);
+        return distA - distB;
+      });
+
+      return pool[0];
+    },
+
+    // Navigation Feedback & Recovery Implementations
+    navigationToast: null,
+    showNavigationToast: (message, opts) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      set({
+        navigationToast: {
+          id,
+          message,
+          type: opts?.type || 'info',
+          actionLabel: opts?.actionLabel,
+          onAction: opts?.onAction,
+        },
+      });
+      setTimeout(() => {
+        const cur = get().navigationToast;
+        if (cur?.id === id) {
+          set({ navigationToast: null });
+        }
+      }, 4500);
+    },
+    clearNavigationToast: () => set({ navigationToast: null }),
+
+    isRecoveryModalOpen: false,
+    setRecoveryModalOpen: (open) => set({ isRecoveryModalOpen: open }),
+
+    findNearestPlanet: () => {
+      const pos = get().spacecraftPosition;
+      const planetIds = Object.keys(PLANET_CATALOG) as PlanetId[];
+      let nearestId: PlanetId = 'origin';
+      let minDist = Infinity;
+      planetIds.forEach((pid) => {
+        const pPos = getPlanetUniversePosition(pid);
+        const d = Math.hypot(pPos[0] - pos[0], pPos[1] - pos[1], pPos[2] - pos[2]);
+        if (d < minDist) {
+          minDist = d;
+          nearestId = pid;
+        }
+      });
+      return nearestId;
+    },
+
+    isAutopilotHintDismissed:
+      getSafeStorage().getItem('lucid_autopilot_hint_dismissed_v1') === 'true',
+    dismissAutopilotHint: () => {
+      getSafeStorage().setItem('lucid_autopilot_hint_dismissed_v1', 'true');
+      set({ isAutopilotHintDismissed: true });
+    },
+
     setFlightTutorialStep: (step) => set({ flightTutorialStep: step }),
     setIsTutorialVisible: (visible) => set({ isTutorialVisible: visible }),
 
@@ -495,6 +787,13 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
         const discovered = { ...get().discoveredPlanets, [planetId]: true };
         storage.setItem('lucid_visited_planets', JSON.stringify(visited));
 
+        const isGuided =
+          get().guidedExplorationState === 'navigating' ||
+          get().guidedExplorationState === 'approaching';
+
+        // Disengage autopilot on touchdown
+        get().disengageAutopilot();
+
         set({
           landingState: 'touchdown',
           flightMode: 'landed',
@@ -504,7 +803,23 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
           landingFeedback: `TOUCHDOWN CONFIRMED // Landed on ${PLANET_CATALOG[planetId]?.name}. Press [E] to disembark.`,
           travelState: 'on_planet',
           isTransitioning: false,
+          guidedExplorationState: isGuided ? 'awaiting-exploration' : get().guidedExplorationState,
         });
+
+        if (isGuided) {
+          get().showNavigationToast(
+            `Destination reached: ${PLANET_CATALOG[planetId]?.name}. Choose whether to explore or continue.`,
+            {
+              type: 'success',
+              actionLabel: 'Next Destination',
+              onAction: () => {
+                const next = get().suggestNextGuidedPlanet();
+                if (next) get().startGuidedExploration(next);
+              },
+            }
+          );
+        }
+
         return true;
       } else {
         soundEngine.playShieldImpact();
@@ -538,6 +853,14 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
       const isConnected = get().connectionMode === 'connected';
       const loadedObjects = await persistence.loadObjects(currentPlanet, isConnected);
 
+      if (get().guidedExplorationState === 'awaiting-exploration') {
+        set({ guidedExplorationState: 'paused' });
+        get().showNavigationToast(
+          'Guided Exploration paused. Take your time exploring on foot.',
+          { type: 'info' }
+        );
+      }
+
       soundEngine.playChime('interact');
       set({
         viewMode: 'world',
@@ -562,6 +885,25 @@ export const useUniverseStore = create<UniverseState>((set, get) => {
 
     initiateTakeoff: () => {
       soundEngine.playTakeoffLiftoff();
+
+      if (get().guidedExplorationState === 'paused') {
+        const next = get().suggestNextGuidedPlanet();
+        set({ guidedExplorationState: 'suggesting-next-destination' });
+        get().showNavigationToast(
+          next
+            ? `Ready for next world? Suggested: ${PLANET_CATALOG[next]?.name}.`
+            : 'All worlds explored! Open Starmap [M] for free exploration.',
+          {
+            type: 'info',
+            actionLabel: next ? `Fly to ${PLANET_CATALOG[next]?.name}` : 'Open Starmap',
+            onAction: () => {
+              if (next) get().startGuidedExploration(next);
+              else get().setMapOpen(true);
+            },
+          }
+        );
+      }
+
       set({
         takeoffState: 'liftoff',
         landingState: 'none',

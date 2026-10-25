@@ -43,3 +43,8 @@ Thumbs.db
 .cache/
 data/
 *.sqlite
+
+# Media and agent output
+brag-output*/
+.agents/
+

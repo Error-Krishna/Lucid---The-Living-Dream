@@ -8,6 +8,9 @@ import { VelocityMotionField } from './VelocityMotionField.js';
 import { FloatingPlanetDiscoveryText } from './FloatingPlanetDiscoveryText.js';
 import { FlightTutorialOverlay } from './FlightTutorialOverlay.js';
 import { ContextualGuidanceBanner } from './ContextualGuidanceBanner.js';
+import { NavigationToastBanner } from './NavigationToastBanner.js';
+import { NavigationRecoveryBanner } from './NavigationRecoveryBanner.js';
+import { GuidedExplorationOverlay } from './GuidedExplorationOverlay.js';
 import { FLIGHT_SENSITIVITY_PRESETS, FlightSensitivityConfig } from './flightSensitivityConfig.js';
 import { soundEngine } from '../../lib/sound.js';
 import { useUniverseStore } from '../../stores/useUniverseStore.js';
@@ -112,7 +115,9 @@ export function CockpitFlightScene() {
     'dark' | 'electrical' | 'lighting' | 'displays' | 'ready'
   >('ready');
   const [boost, setBoost] = useState(false);
-  const [autopilot, setAutopilot] = useState(false);
+  const autopilot = useUniverseStore((s) => s.autopilot);
+  const toggleAutopilot = useUniverseStore((s) => s.toggleAutopilot);
+  const disengageAutopilot = useUniverseStore((s) => s.disengageAutopilot);
   const [isMuted, setIsMuted] = useState(soundEngine.getIsMuted());
   const [showControlsHelp, setShowControlsHelp] = useState(true);
 
@@ -184,6 +189,27 @@ export function CockpitFlightScene() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       keysRef.current[e.code] = true;
 
+      // Immediate manual override when pilot provides deliberate steering or throttle input
+      const isManualSteeringOrThrustKey = [
+        'KeyW',
+        'KeyS',
+        'KeyA',
+        'KeyD',
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'KeyQ',
+        'KeyE',
+        'ShiftLeft',
+        'ShiftRight',
+        'KeyR',
+      ].includes(e.code);
+
+      if (isManualSteeringOrThrustKey && autopilot) {
+        disengageAutopilot('Manual control restored.');
+      }
+
       // Throttle controls
       if (e.code === 'KeyW' || e.code === 'ArrowUp') {
         if (flightMode === 'landed') {
@@ -203,12 +229,12 @@ export function CockpitFlightScene() {
         if (flightMode === 'landed') {
           initiateTakeoff();
         } else {
-          setAutopilot((prev) => {
-            const next = !prev;
-            if (next) soundEngine.playTargetLocked();
-            else soundEngine.playUIBeep('low');
-            return next;
-          });
+          toggleAutopilot();
+        }
+      } else if (e.code === 'Escape') {
+        if (autopilot) {
+          e.preventDefault();
+          disengageAutopilot('Manual control restored.');
         }
       } else if (e.code === 'KeyF') {
         e.preventDefault();
@@ -285,6 +311,10 @@ export function CockpitFlightScene() {
         const dx = e.clientX - lastMousePosRef.current.x;
         const dy = e.clientY - lastMousePosRef.current.y;
         lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+        if (autopilot && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+          disengageAutopilot('Manual control restored.');
+        }
 
         // Continuous full 360-degree yaw steering using calibrated sensitivity
         steeringRef.current.yaw -= dx * sensitivity.mouseSensitivity;
@@ -592,6 +622,15 @@ export function CockpitFlightScene() {
         gearDeployed={gearDeployed}
       />
 
+      {/* Navigation Toast Notifications */}
+      <NavigationToastBanner />
+
+      {/* Navigation Recovery & First-Time Hint Banner */}
+      <NavigationRecoveryBanner distanceToTarget={distanceToTarget} speed={speed} />
+
+      {/* Guided Exploration Tour Destination Overlay */}
+      <GuidedExplorationOverlay />
+
       {/* Interactive Step-by-Step Flight Tutorial */}
       <FlightTutorialOverlay />
 
@@ -628,7 +667,7 @@ export function CockpitFlightScene() {
 
       {/* Bottom Floating Control Guide Pill */}
       {showControlsHelp && (
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none max-w-[95vw]">
+        <div className="hidden md:block absolute bottom-24 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none max-w-[95vw]">
           <div className="glass-panel px-5 py-2.5 rounded-2xl border border-slate-700/60 text-slate-300 text-xs font-mono flex flex-wrap items-center justify-center gap-4 shadow-2xl backdrop-blur-md">
             <span><strong className="text-cyan-400">W/S</strong> Throttle</span>
             <span><strong className="text-cyan-400">A/D / Mouse</strong> Steer (360°)</span>
@@ -676,12 +715,14 @@ function PhysicalFlightController({
   const flightMode = useUniverseStore((s) => s.flightMode);
   const setFlightMode = useUniverseStore((s) => s.setFlightMode);
   const gearDeployed = useUniverseStore((s) => s.gearDeployed);
+  const setGearDeployed = useUniverseStore((s) => s.setGearDeployed);
   const setRadarAltitude = useUniverseStore((s) => s.setRadarAltitude);
   const attemptLanding = useUniverseStore((s) => s.attemptLanding);
   const landingAssistance = useUniverseStore((s) => s.landingAssistance);
   const headingAssistance = useUniverseStore((s) => s.headingAssistance);
   const approachAssistance = useUniverseStore((s) => s.approachAssistance);
   const takeoffState = useUniverseStore((s) => s.takeoffState);
+  const setAutopilotPhase = useUniverseStore((s) => s.setAutopilotPhase);
 
   // Position and velocity vectors
   const posRef = useRef(new THREE.Vector3(...spacecraftPosition));
@@ -744,13 +785,16 @@ function PhysicalFlightController({
         while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
         while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
 
-        const assistRate = autopilot ? 2.5 : 1.4;
+        const assistRate = autopilot ? 3.2 : 1.4;
         steering.yaw += diffYaw * Math.min(1.0, assistRate * dt);
         steering.pitch = THREE.MathUtils.lerp(
           steering.pitch,
           Math.max(-1.45, Math.min(1.45, desiredPitch)),
           dt * assistRate
         );
+        if (autopilot) {
+          steering.roll = THREE.MathUtils.lerp(steering.roll, 0, dt * 3.0);
+        }
       }
     }
 
@@ -780,6 +824,68 @@ function PhysicalFlightController({
     // Apply thrust along forward heading
     const accel = forwardVec.clone().multiplyScalar(totalThrust * dt);
     velRef.current.add(accel);
+
+    // Full Bounded Autopilot Autonomous Propulsion & Corridor Speed Regulation
+    if (autopilot && selectedTargetId) {
+      const [tx, ty, tz] = getPlanetUniversePosition(selectedTargetId);
+      const toTargetVec = new THREE.Vector3(
+        tx - posRef.current.x,
+        ty - posRef.current.y,
+        tz - posRef.current.z
+      );
+      const dTarget = toTargetVec.length();
+      const curSpeed = velRef.current.length();
+
+      // Check alignment with target
+      const targetDir = toTargetVec.clone().normalize();
+      const alignmentDot = forwardVec.dot(targetDir);
+      const isAligned = alignmentDot > 0.85;
+
+      if (dTarget > 350) {
+        // Cruising Phase: Accelerate smoothly toward cruise speed (85-90 km/s)
+        setAutopilotPhase('cruising');
+        const cruiseSpeed = 88;
+        if (isAligned && curSpeed < cruiseSpeed) {
+          const autoThrust = forwardVec.clone().multiplyScalar(sensitivity.thrustAcceleration * 1.15 * dt);
+          velRef.current.add(autoThrust);
+        } else if (curSpeed > cruiseSpeed + 12) {
+          velRef.current.multiplyScalar(Math.max(0.5, 1 - 0.35 * dt));
+        }
+      } else if (dTarget <= 350 && dTarget > 60) {
+        // Approaching Phase: Decelerate gradually as destination nears
+        setAutopilotPhase('approaching');
+        const corridorMaxSpeed = Math.max(22, (dTarget / 350) * 80);
+        if (curSpeed > corridorMaxSpeed) {
+          const brakeDecel = sensitivity.thrustAcceleration * 1.35 * dt;
+          const newSpeed = Math.max(corridorMaxSpeed, curSpeed - brakeDecel);
+          velRef.current.multiplyScalar(newSpeed / curSpeed);
+        } else if (isAligned && curSpeed < corridorMaxSpeed * 0.75) {
+          velRef.current.add(forwardVec.clone().multiplyScalar(sensitivity.thrustAcceleration * 0.5 * dt));
+        }
+
+        // Auto deploy landing gear when approaching under 120km
+        if (dTarget < 120 && !gearDeployed) {
+          setGearDeployed(true);
+        }
+      } else if (dTarget <= 60) {
+        // Arrival Hold Phase: Gentle speed hold for safe orbit and landing corridor
+        const safeHoldSpeed = 16;
+        if (curSpeed > safeHoldSpeed) {
+          const brakeDecel = sensitivity.thrustAcceleration * 1.6 * dt;
+          const newSpeed = Math.max(safeHoldSpeed, curSpeed - brakeDecel);
+          velRef.current.multiplyScalar(newSpeed / curSpeed);
+        }
+        setAutopilotPhase('arrival-hold');
+      }
+
+      // Actively dampen lateral drift relative to target approach vector
+      if (dTarget > 5) {
+        const colinearSpeed = velRef.current.dot(targetDir);
+        const colinearVel = targetDir.clone().multiplyScalar(colinearSpeed);
+        const lateralDrift = velRef.current.clone().sub(colinearVel);
+        velRef.current.sub(lateralDrift.multiplyScalar(Math.min(1.0, 1.2 * dt)));
+      }
+    }
 
     // Active retro-braking thrusters when holding reverse key [S]
     if (keys['KeyS'] || keys['ArrowDown']) {
